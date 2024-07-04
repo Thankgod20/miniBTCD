@@ -13,9 +13,10 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"minibtcd/trx"
 	"strings"
 	"sync"
+
+	"github.com/Thankgod20/miniBTCD/trx"
 
 	"golang.org/x/crypto/ripemd160"
 )
@@ -127,6 +128,7 @@ func (m *Mempool) SubmitTransaction(trnx *trx.Transaction, untrnx *trx.Transacti
 		utxosAmount += txo.Value
 	}
 	for _, output := range tx.Outputs {
+		log.Println(" Output:-", output.Value)
 		trxTotalAmount += output.Value
 	}
 	log.Println("Total Amount Comparison", trxTotalAmount, utxosAmount)
@@ -204,13 +206,15 @@ func (m *Mempool) SubmitSegWitTransaction(trnx *trx.SegWit, untrnx *trx.SegWit, 
 
 		}
 		log.Printf("Input ID Normalizes ")
+		log.Println(" Output Seg:-", txo.Value, i)
 		utxosAmount += txo.Value
 	}
 
 	//amount comparison
 
 	var trxTotalAmount int
-	for _, output := range tx.Outputs {
+	for _, output := range unTx.Outputs {
+
 		trxTotalAmount += output.Value
 	}
 	log.Println("Total Amount Comparison", trxTotalAmount, utxosAmount)

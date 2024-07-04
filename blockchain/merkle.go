@@ -5,7 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"log"
-	"minibtcd/trx"
+
+	"github.com/Thankgod20/miniBTCD/trx"
 )
 
 type MerkleTree struct {

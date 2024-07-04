@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"strings"
 
-	"minibtcd/mempool"
-	"minibtcd/trx"
+	"github.com/Thankgod20/miniBTCD/mempool"
+	"github.com/Thankgod20/miniBTCD/trx"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -81,14 +81,38 @@ func (bc *Blockchain) SaveBlock(block *Block) {
 }
 
 func (bc *Blockchain) LoadBlocks() {
-
 	keys, err := bc.rdb.Keys(context.Background(), "*").Result()
 	if err != nil {
 		log.Fatal(err)
 	}
-	// Sort keys in reverse lexicographical order
-	sort.Strings(keys) //sort.Sort(sort.Reverse(sort.StringSlice(keys)))
+
+	// Extract numerical part from each key and store in a map
+	keyMap := make(map[int]string)
 	for _, key := range keys {
+		// Assuming keys are in the format "x_xxxxxx"
+		parts := strings.Split(key, "_")
+		if len(parts) < 2 {
+			continue
+		}
+
+		num, err := strconv.Atoi(parts[0])
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		keyMap[num] = key
+	}
+
+	// Extract and sort the numerical keys
+	numKeys := make([]int, 0, len(keyMap))
+	for num := range keyMap {
+		numKeys = append(numKeys, num)
+	}
+	sort.Ints(numKeys)
+
+	// Load blocks based on sorted numerical keys
+	for _, num := range numKeys {
+		key := keyMap[num]
 		blockData, err := bc.rdb.Get(context.Background(), key).Bytes()
 		if err != nil {
 			log.Fatal(err)

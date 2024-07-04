@@ -15,8 +15,9 @@ import (
 	"log"
 	"math"
 	"math/big"
-	"minibtcd/trx"
 	"strings"
+
+	"github.com/Thankgod20/miniBTCD/trx"
 
 	"golang.org/x/crypto/pbkdf2"
 )

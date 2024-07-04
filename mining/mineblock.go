@@ -5,8 +5,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"minibtcd/blockchain"
-	"minibtcd/trx"
+
+	"github.com/Thankgod20/miniBTCD/blockchain"
+	"github.com/Thankgod20/miniBTCD/trx"
 )
 
 func AddBlock(transactions [][]byte /*[]*trx.Transaction*/, bc *blockchain.Blockchain) { //miner string) {

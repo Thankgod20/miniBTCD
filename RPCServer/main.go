@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"flag"
 	"log"
-	"minibtcd/blockchain"
-	"minibtcd/mining"
 	"net"
 	"net/http"
 	"net/rpc"
 	"time"
+
+	"github.com/Thankgod20/miniBTCD/blockchain"
+	"github.com/Thankgod20/miniBTCD/mining"
 
 	"github.com/go-redis/redis/v8"
 )

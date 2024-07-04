@@ -7,8 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"minibtcd/trx"
 	"strings"
+
+	"github.com/Thankgod20/miniBTCD/trx"
 )
 
 type GetVerifyTransactionArgs struct{ TransactionID string }

@@ -5,9 +5,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"minibtcd/trx"
 	"strings"
 	"sync"
+
+	"github.com/Thankgod20/miniBTCD/trx"
 )
 
 type UTXOSet struct {
@@ -148,7 +149,7 @@ func (u *UTXOSet) UTXOAddress(pubKeyHash string, pubkey string, amount int) (map
 
 			total += out.Value
 			log.Println("Amount", amount, total)
-			if total >= amount {
+			if total > amount {
 				log.Println("break", amount, total)
 				break
 			}
@@ -158,7 +159,7 @@ func (u *UTXOSet) UTXOAddress(pubKeyHash string, pubkey string, amount int) (map
 			//fmt.Println("Public Hash Coin", out.PubKeyHash , "Script:", scriptPubkey)
 			total += out.Value
 			log.Println("Amount PubKey", amount, total)
-			if total >= amount {
+			if total > amount {
 				break
 			}
 		}

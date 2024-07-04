@@ -6,10 +6,11 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"minibtcd/blockchain"
-	"minibtcd/trx"
-	"minibtcd/wallet"
 	"net/rpc"
+
+	"github.com/Thankgod20/miniBTCD/blockchain"
+	"github.com/Thankgod20/miniBTCD/trx"
+	"github.com/Thankgod20/miniBTCD/wallet"
 )
 
 // PassPharse

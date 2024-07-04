@@ -7,8 +7,9 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"log"
-	"minibtcd/trx"
 	"time"
+
+	"github.com/Thankgod20/miniBTCD/trx"
 )
 
 type Block struct {

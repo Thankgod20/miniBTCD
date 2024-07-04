@@ -5,7 +5,8 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"math/big"
-	"minibtcd/blockchain"
+
+	"github.com/Thankgod20/miniBTCD/blockchain"
 
 	"strconv"
 )
