@@ -60,6 +60,7 @@ func AddBlock(transactions [][]byte /*[]*trx.Transaction*/, bc *blockchain.Block
 	newBlock.Hash = hash[:]
 	newBlock.Nonce = nonce
 	newBlock.Bits = bit
+	newBlock.Version = []byte{0x00, 0x00, 0x00, 0x20}
 	log.Println("Nonce:", nonce, "New Hash:", hex.EncodeToString(hash), "Bit", hex.EncodeToString(bit))
 	bc.Blocks = append(bc.Blocks, newBlock)
 	bc.SaveBlock(newBlock)

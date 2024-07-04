@@ -4,6 +4,7 @@ package blockchain
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/gob"
 	"encoding/hex"
 	"log"
@@ -13,8 +14,9 @@ import (
 )
 
 type Block struct {
+	Version       []byte
 	Height        int
-	Timestamp     int64
+	Timestamp     uint32
 	Bits          []byte
 	Transactions  [][]byte //[]*trx.Transaction
 	PrevBlockHash []byte
@@ -62,7 +64,7 @@ func (b *Block) SetHash() {
 func NewBlock(height int, transactions [][]byte, prevBlockHash []byte) *Block {
 	block := &Block{
 		Height:        height,
-		Timestamp:     time.Now().Unix(),
+		Timestamp:     uint32(time.Now().Unix()),
 		Transactions:  transactions,
 		PrevBlockHash: prevBlockHash,
 		Hash:          []byte{},
@@ -153,4 +155,42 @@ func (b *Block) RemoveTransaction(txID []byte) bool {
 	b.SetHash()
 
 	return true
+}
+
+// Converts the block's header fields to a byte slice in the correct order
+func (b *Block) SerializeHeader() []byte {
+	var result bytes.Buffer
+
+	// Version (4 bytes, little-endian)
+	if _, err := result.Write(b.Version); err != nil {
+		log.Panic(err)
+	}
+
+	// Previous Block Hash (32 bytes, big-endian)
+	if _, err := result.Write(b.PrevBlockHash); err != nil {
+		log.Panic(err)
+	}
+
+	// Merkle Root (32 bytes, big-endian)
+	if _, err := result.Write(b.MerkleRoot); err != nil {
+		log.Panic(err)
+	}
+
+	// Timestamp (4 bytes, little-endian)
+	timebytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(timebytes, uint32(b.Timestamp))
+	if _, err := result.Write(timebytes); err != nil {
+		log.Panic(err)
+	}
+	// Bits (4 bytes, little-endian)
+	if _, err := result.Write(b.Bits); err != nil {
+		log.Panic(err)
+	}
+
+	// Nonce (4 bytes, little-endian)
+	if err := binary.Write(&result, binary.LittleEndian, int32(b.Nonce)); err != nil {
+		log.Panic(err)
+	}
+
+	return result.Bytes()
 }
