@@ -3,7 +3,6 @@ package mining
 
 import (
 	"encoding/hex"
-	"fmt"
 	"log"
 
 	"github.com/Thankgod20/miniBTCD/blockchain"
@@ -55,11 +54,13 @@ func AddBlock(transactions [][]byte /*[]*trx.Transaction*/, bc *blockchain.Block
 	newBlock := blockchain.NewBlock(prevBlock.Height+1, transactions, prevBlock.Hash)
 
 	pow := NewProofOfWork(newBlock)
-	nonce, hash := pow.Run()
+	nonce, bit, hash := pow.Run()
 	// Set the new block's hash and nonce
+
 	newBlock.Hash = hash[:]
 	newBlock.Nonce = nonce
-	fmt.Println("Nonce:", nonce, "New Hash:", hex.EncodeToString(hash))
+	newBlock.Bits = bit
+	log.Println("Nonce:", nonce, "New Hash:", hex.EncodeToString(hash), "Bit", hex.EncodeToString(bit))
 	bc.Blocks = append(bc.Blocks, newBlock)
 	bc.SaveBlock(newBlock)
 	bc.UpdateUTXOSet(newBlock)

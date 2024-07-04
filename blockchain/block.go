@@ -15,6 +15,7 @@ import (
 type Block struct {
 	Height        int
 	Timestamp     int64
+	Bits          []byte
 	Transactions  [][]byte //[]*trx.Transaction
 	PrevBlockHash []byte
 	Hash          []byte
@@ -67,7 +68,7 @@ func NewBlock(height int, transactions [][]byte, prevBlockHash []byte) *Block {
 		Hash:          []byte{},
 		Nonce:         0,
 	}
-	block.MerkleRoot = []byte{} //block.CalculateMerkleRoot()
+	block.MerkleRoot = block.CalculateMerkleRoot()
 	block.SetHash()
 	//fmt.Println("Hash Obtained")
 	return block

@@ -154,6 +154,7 @@ func ToBlockString(bc Block) string {
 
 	lines = append(lines, fmt.Sprintf("Prev Block Hash: %x", bc.PrevBlockHash))
 	lines = append(lines, fmt.Sprintf("Block Hash: %x", bc.Hash))
+	lines = append(lines, fmt.Sprintf("Bits : %x", bc.Bits))
 	lines = append(lines, fmt.Sprintf("Nonce: %d", bc.Nonce))
 	lines = append(lines, fmt.Sprintf("MerkleRoot: %x", bc.MerkleRoot))
 	return strings.Join(lines, "\n")
