@@ -101,6 +101,7 @@ func (m *Mempool) SubmitTransaction(trnx *trx.Transaction, untrnx *trx.Transacti
 		}
 		var signature string
 		var publKey []byte
+		var isP2SH bool = false
 		//signature
 		if input.Sig[:2] == "47" {
 			sliptSig := strings.Split(input.Sig[2:], "0121")
@@ -111,7 +112,19 @@ func (m *Mempool) SubmitTransaction(trnx *trx.Transaction, untrnx *trx.Transacti
 			}
 			//fmt.Println("Publick from SigScript:", sliptSig[1])
 			publKey = publkey_
+			isP2SH = false
+		} else if input.Sig[:4] == "0047" {
+			sliptSig := strings.Split(input.Sig[4:], "01475121")
+			signature = sliptSig[0]
+			publkey_, err := hex.DecodeString(sliptSig[1][:len(sliptSig[1])-4])
+			if err != nil {
+				log.Println("Unable to Decode PubKey", err)
+			}
+			fmt.Println("Publick from SigScript:", sliptSig[1][:len(sliptSig[1])-4])
+			publKey = publkey_
+			isP2SH = true
 		}
+
 		//Process ScriptPubKeyHash
 		pubKeyHash, _, err := ExtractPubKeyHash(txo.PubKeyHash)
 		if err != nil {
@@ -121,7 +134,7 @@ func (m *Mempool) SubmitTransaction(trnx *trx.Transaction, untrnx *trx.Transacti
 
 		//Get raw Tran
 		// Verify signature
-		if !VerifySignature(pubKeyHash, signature, publKey, tx) { //input.Sig, pubKey) {
+		if !VerifySignature(pubKeyHash, signature, isP2SH, publKey, tx) { //input.Sig, pubKey) {
 			log.Println("invalid signature")
 			return ("invalid signature")
 		}
@@ -270,7 +283,7 @@ func doubleSha256(data []byte) []byte {
 }
 
 // VerifySignature verifies if the signature is valid for the given hash and public key
-func VerifySignature(pubKeyHash string, signature string, pubKeyx []byte, tx *trx.Transaction) bool {
+func VerifySignature(pubKeyHash string, signature string, isP2SH bool, pubKeyx []byte, tx *trx.Transaction) bool {
 	pubKey := pubKeyx
 	isCompressed := false
 	if pubKey[0] != 0x04 || len(pubKey) != 65 {
@@ -289,10 +302,21 @@ func VerifySignature(pubKeyHash string, signature string, pubKeyx []byte, tx *tr
 		log.Println("Unable to Decode PubKey to byte", err)
 	}
 	log.Println("Checking Hash160 of Addr....")
+	if isP2SH {
+		pubKey = append([]byte{0x51, 0x21}, pubKey...)
+		pubKey = append(pubKey, []byte{0x52, 0xae}...)
+		log.Printf("P2SH Redemm Script:%x", pubKey)
+	}
 	wpubKey := hash160(pubKey)
 	if isCompressed {
+		if isP2SH {
+			pubKeyx = append([]byte{0x51, 0x21}, pubKeyx...)
+			pubKeyx = append(pubKeyx, []byte{0x52, 0xae}...)
+			log.Printf("P2SH Compressed Redemm Script:%x", pubKeyx)
+		}
 		wpubKey = hash160(pubKeyx)
 	}
+	log.Printf("Compare:%x and %x", hash, wpubKey)
 	if bytes.Equal(hash, wpubKey) {
 		//get the hex of the transcations
 		for i := range tx.Inputs {
@@ -309,7 +333,7 @@ func VerifySignature(pubKeyHash string, signature string, pubKeyx []byte, tx *tr
 		}
 		//double hash the message
 		dataToSign := doubleSha256(toBytes)
-		//fmt.Println("script PubKey", pubKeyHash, "Spender Pubkey", hex.EncodeToString(wpubKey), "Trna Hex", trxhex)
+		fmt.Println("script PubKey", pubKeyHash, "Spender Pubkey", hex.EncodeToString(wpubKey), "Trna Hex", trxhex)
 		r := big.NewInt(0)
 		s := big.NewInt(0)
 		// Define signature structure
@@ -319,13 +343,15 @@ func VerifySignature(pubKeyHash string, signature string, pubKeyx []byte, tx *tr
 		var sign ECDSASignature
 
 		//decode from DER
-		//log.Println("Signature:", signature, signature[:len(signature)-2])
+		log.Println("Signature:", signature, signature[:len(signature)-2])
 		sigBytes, err := hex.DecodeString(signature)
 		if err != nil {
+			log.Println("Error", err)
 			return false
 		}
 		_, err = asn1.Unmarshal(sigBytes, &sign)
 		if err != nil {
+			log.Println("Error", err)
 			return false
 		}
 		r = sign.R
@@ -333,10 +359,12 @@ func VerifySignature(pubKeyHash string, signature string, pubKeyx []byte, tx *tr
 		log.Println("Signatures", r, s)
 		//r.SetBytes(sigBytes[:len(sigBytes)/2])
 		//s.SetBytes(sigBytes[len(sigBytes)/2:])
-
+		if isP2SH {
+			pubKey = pubKey[2 : len(pubKey)-2]
+		}
 		x, y := elliptic.Unmarshal(elliptic.P256(), pubKey)
 		rawPubKey := ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}
-
+		//log.Printf("dataToSign %x %x", dataToSign, pubKey)
 		return ecdsa.Verify(&rawPubKey, dataToSign, r, s)
 	} else {
 		return false

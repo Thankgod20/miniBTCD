@@ -15,6 +15,12 @@ import (
 type GetVerifyTransactionArgs struct{ TransactionID string }
 type GetBlockArgs struct{ TransactionID string }
 type GetLatestBlockArgs struct{}
+type GetAddressHistoryArgs struct {
+	Address string
+}
+type GetAddressHistoryReply struct {
+	TransactionHex []string
+}
 type GetTransactionsArgs struct {
 	//Transactions *trx.Transaction
 	//SegWit       *trx.SegWit
@@ -282,43 +288,41 @@ func (bc *Blockchain) VerifyTX(args *GetTransactionReply, reply *GetLatestBlockR
 }
 func (bc *Blockchain) GetTX(args *GetTransactionReply, reply *GetLatestBlockReply) error {
 	//var isExist bool
-	for _, block := range bc.Blocks {
-		/*trxID, err := hex.DecodeString(args.TransactionID)
-		if err != nil {
-			log.Println("Error Decode Verify Tx", err)
-		}*/
-		//if block.VerifyTransaction(trxID) {
-		//isExist := true
-		//log.Println("iii", i)
-		for _, txDetail := range block.Transactions {
-			if IsSegWitTransaction(txDetail) {
-				txS := hex.EncodeToString(txDetail)
-				segTx, err := trx.FromSegWitHex(txS)
-				if err != nil {
-					log.Println("Decode Genesis Hex Error:", err)
-				}
-				if hex.EncodeToString(segTx.ID) == args.TransactionID {
-					reply.JSONString = segTx.ToString() //("True")
-					log.Println("Transaction exists in the blockchain.")
-					break
-				}
-			} else {
-				txS := hex.EncodeToString(txDetail)
-				trnx, err := trx.FromHex(txS)
-				if err != nil {
-					log.Println("Decode Genesis Hex Error:", err)
-				}
-				if hex.EncodeToString(trnx.ID) == args.TransactionID {
-					reply.JSONString = trnx.ToString() //("True")
-					log.Println("Transaction exists in the blockchain.")
-					break
-				}
-
-			}
-		}
-		//break
-		//}
+	if txs, exists := bc.IndexTrx.TransactionByID[args.TransactionID]; exists {
+		//return txIDs
+		reply.JSONString = txs
 	}
+	/*
+		for _, block := range bc.Blocks {
+
+			for _, txDetail := range block.Transactions {
+				if IsSegWitTransaction(txDetail) {
+					txS := hex.EncodeToString(txDetail)
+					segTx, err := trx.FromSegWitHex(txS)
+					if err != nil {
+						log.Println("Decode Genesis Hex Error:", err)
+					}
+					if hex.EncodeToString(segTx.ID) == args.TransactionID {
+						reply.JSONString = segTx.ToString() //("True")
+						log.Println("Transaction exists in the blockchain.")
+						break
+					}
+				} else {
+					txS := hex.EncodeToString(txDetail)
+					trnx, err := trx.FromHex(txS)
+					if err != nil {
+						log.Println("Decode Genesis Hex Error:", err)
+					}
+					if hex.EncodeToString(trnx.ID) == args.TransactionID {
+						reply.JSONString = trnx.ToString() //("True")
+						log.Println("Transaction exists in the blockchain.")
+						break
+					}
+
+				}
+			}
+
+		}*/
 	return nil
 }
 func (bc *Blockchain) GetBlockRPC(args *GetBlockArgs, reply *GetBlockReply) error {
@@ -326,6 +330,14 @@ func (bc *Blockchain) GetBlockRPC(args *GetBlockArgs, reply *GetBlockReply) erro
 	block := bc.GetBlock(args.TransactionID)
 	if block != "" {
 		reply.Block = block
+	}
+	return nil
+}
+func (bc *Blockchain) GetTransactionHistory(args *GetAddressHistoryArgs, reply *GetAddressHistoryReply) error {
+	//bc.IndexTrx[args.Address]
+	if txIDs, exists := bc.IndexTrx.AddressTransactionIndex[args.Address]; exists {
+		//return txIDs
+		reply.TransactionHex = txIDs
 	}
 	return nil
 }

@@ -4,12 +4,15 @@ package wallet
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"regexp"
 	"strings"
 
+	"github.com/Thankgod20/miniBTCD/trx"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -32,9 +35,9 @@ func doubleSha256(data []byte) []byte {
 func publicKeyToBech32Address(publicKey []byte) (string, error) {
 	// Convert the public key to a public key hash
 	pubKeyHash := hash160(publicKey)
-
+	log.Printf("Bech32: %x", pubKeyHash)
 	// Create the Bech32 address
-	bech32Address, err := encodeBech32(pubKeyHash)
+	bech32Address, err := EncodeBech32(pubKeyHash)
 	if err != nil {
 		return "", err
 	}
@@ -46,29 +49,38 @@ func publicKeyToP2PKHAddress(publicKey []byte) (string, error) {
 	versionedPayload := append([]byte{0x00}, pubKeyHash...)
 
 	//checksum of address
-	checksum := checkSumLegacy(versionedPayload)
+	checksum := CheckSumLegacy(versionedPayload)
 
 	//Add the 4 checksum bytes at the end of extended RIPEMD-160 hash to form the binary Bitcoin address.
 	binaryAddress := append(versionedPayload, checksum...)
 	//Convert the binary address to Base58.
+	log.Printf("Address:%x", binaryAddress)
 	address := Base58Encode(binaryAddress)
 	return address, nil
 }
 func publicKeyToP2SHAddress(publicKey []byte) (string, error) {
+	//fmt.Println("P2SH PubKey", hex.EncodeToString(publicKey))
 	// Convert the public key to a public key hash
-	pubKeyHash := hash160(publicKey)
+	redeemScript := "OP_1 OP_PUSHBYTES_33 /" + hex.EncodeToString(publicKey) + "/ OP_2 OP_CHECKMULTISIG"
+	pubkeylen := byte(len(publicKey))
+	redeemScripthex, _ := trx.DecodeScriptPubKey(redeemScript, pubkeylen)
+
+	//fmt.Println("redeemScripthex", hex.EncodeToString(redeemScripthex))
+	pubKeyHash := hash160(redeemScripthex)
+	log.Printf("PubKey HAsh %x Redeem Script %x", pubKeyHash, redeemScripthex)
 	versionedPayload := append([]byte{0x05}, pubKeyHash...)
 
 	//checksum of address
-	checksum := checkSumLegacy(versionedPayload)
+	checksum := CheckSumLegacy(versionedPayload)
 
 	//Add the 4 checksum bytes at the end of extended RIPEMD-160 hash to form the binary Bitcoin address.
 	binaryAddress := append(versionedPayload, checksum...)
 	//Convert the binary address to Base58.
+	log.Printf("Address:%x", binaryAddress)
 	address := Base58Encode(binaryAddress)
 	return address, nil
 }
-func checkSumLegacy(versionedPayload []byte) []byte {
+func CheckSumLegacy(versionedPayload []byte) []byte {
 
 	// Step 4: SHA-256 hash of the extended RIPEMD-160 result.
 	firstSHA := sha256.Sum256(versionedPayload)
@@ -81,7 +93,7 @@ func checkSumLegacy(versionedPayload []byte) []byte {
 }
 
 // encodeBech32 encodes a byte array to a Bech32 address
-func encodeBech32(data []byte) (string, error) {
+func EncodeBech32(data []byte) (string, error) {
 	// Bech32 encoding parameters
 	const hrp = "bc"  // Human-readable part for mainnet
 	const version = 0 // Witness version

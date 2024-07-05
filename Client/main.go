@@ -38,12 +38,16 @@ func main() {
 	verifyHash := flag.String("verifytxID", "", "verify  txID")
 	getTrx := flag.String("getTrx", "", "Get  txID")
 	getblock := flag.String("getblock", "", "Get  txID")
+	getaddrhistry := flag.String("trnxs", "", "Get  txID")
 	//getlatestBlock(client)
 	flag.Parse()
 	switch {
 	case *getlatestblock:
 		log.Println("Get Latest Block")
 		getlatestBlock(client)
+	case *getaddrhistry != "":
+		log.Println("Get Address History")
+		getTrnxHistory(client, *getaddrhistry)
 	case *getblock != "":
 		log.Println("Get Latest Block")
 		getBlock(client, *getblock)
@@ -115,6 +119,23 @@ func main() {
 		log.Println("Usage <client.go> --<options>. Please use --latestblock.")
 	}
 
+}
+func getTrnxHistory(client *rpc.Client, address string) {
+	args := blockchain.GetAddressHistoryArgs{Address: address}
+	var reply blockchain.GetAddressHistoryReply
+
+	err := client.Call("Blockchain.GetTransactionHistory", &args, &reply)
+	if err != nil {
+		log.Fatalf("Failed to get latest block: %v", err)
+	}
+
+	/*var block blockchain.Block
+	err = json.Unmarshal(reply.JSONBlock, &block)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal block JSON: %v", err)
+	}*/
+
+	fmt.Println("Latest Block:", reply.TransactionHex) //block)
 }
 func getlatestBlock(client *rpc.Client) {
 	args := blockchain.GetLatestBlockArgs{}

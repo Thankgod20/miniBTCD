@@ -27,6 +27,7 @@ const SatoshiPerBitcoin = 100000000
 // 3Ag5RYpyspx4j8q9HFY1aJA3nLcK25AFHy
 // 19z4W1LYKvdgdy8iA9sR9fo7dpKbTsZsQG
 // bc1qv296xj9aw54lapulrvcuyq7ku4gl8p27yh9cc8
+// 3FJaijzLa6FA2a6KDoZ733iBu18pHhiECk
 // go run main.go --newWallet="My New Wallet" --p2sh //go run main.go --wallet --balance="19z4W1LYKvdgdy8iA9sR9fo7dpKbTsZsQG"
 type Wallet struct {
 	PrivateKey *ecdsa.PrivateKey
@@ -376,7 +377,11 @@ func (w *Wallet) Sign(tx *trx.Transaction, trnxhex string, publicKeyHash string)
 		} else {
 			publicKey = append([]byte{0x03}, w.PrivateKey.PublicKey.X.Bytes()...)
 		}
-		tx.Inputs[i].Sig = "OP_PUSHBYTES_71 /" + signature + "/ OP_PUSHBYTES_33 /" + hex.EncodeToString(publicKey) + "/" //hex.EncodeToString(signature)
+		if strings.HasPrefix(w.Address, "1") {
+			tx.Inputs[i].Sig = "OP_PUSHBYTES_71 /" + signature + "/ OP_PUSHBYTES_33 /" + hex.EncodeToString(publicKey) + "/" //hex.EncodeToString(signature)
+		} else {
+			tx.Inputs[i].Sig = "OP_0 OP_PUSHBYTES_71 /" + signature + "/ OP_PUSHBYTES_71 OP_1 OP_PUSHBYTES_33 /" + hex.EncodeToString(publicKey) + "/ OP_2 OP_CHECKMULTISIG"
+		}
 	}
 	return tx
 }

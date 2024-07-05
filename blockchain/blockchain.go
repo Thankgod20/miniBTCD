@@ -19,10 +19,11 @@ import (
 )
 
 type Blockchain struct {
-	Blocks  []*Block
-	rdb     *redis.Client
-	Mempool *mempool.Mempool
-	UTXOSet *mempool.UTXOSet
+	Blocks   []*Block
+	rdb      *redis.Client
+	Mempool  *mempool.Mempool
+	UTXOSet  *mempool.UTXOSet
+	IndexTrx *mempool.IndexTrx
 }
 
 func (bc *Blockchain) UpdateUTXOSet(block *Block) {
@@ -43,10 +44,10 @@ func (bc *Blockchain) UpdateUTXOSet(block *Block) {
 					bc.UTXOSet.RemoveUTXO(hex.EncodeToString(in.ID), in.Out)
 				}
 			}
+			bc.IndexTrx.IndexSegTransaction(segTx)
 		} else {
 			log.Println("Transacion Type Legacy")
 			txS := hex.EncodeToString(tx)
-			//log.Printf("\n--------------------------\n %s \n---------------------------------------\n", txS)
 			txn, err := trx.FromHex(txS)
 			//fmt.Println("Tdff", txn.ToString())
 			if err != nil {
@@ -62,6 +63,8 @@ func (bc *Blockchain) UpdateUTXOSet(block *Block) {
 					bc.UTXOSet.RemoveUTXO(hex.EncodeToString(in.ID), in.Out)
 				}
 			}
+			//Index Transactions
+			bc.IndexTrx.IndexTransaction(txn)
 		}
 	}
 }
@@ -165,10 +168,11 @@ func ToBlockString(bc Block) string {
 func NewBlockchain(rdb *redis.Client) *Blockchain {
 
 	bc := &Blockchain{
-		Blocks:  []*Block{}, //[]*Block{genesisBlock},
-		rdb:     rdb,
-		Mempool: mempool.NewMempool(),
-		UTXOSet: mempool.NewUTXOSet(),
+		Blocks:   []*Block{}, //[]*Block{genesisBlock},
+		rdb:      rdb,
+		Mempool:  mempool.NewMempool(),
+		UTXOSet:  mempool.NewUTXOSet(),
+		IndexTrx: mempool.NewMIndexTrx(),
 	}
 	bc.LoadBlocks()
 

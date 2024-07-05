@@ -501,6 +501,12 @@ func DecodeScriptPubKey(scriptPubKey string, pubKeyHashLen byte) ([]byte, error)
 			result = append(result, 0xac)
 		case part == "OP_0":
 			result = append(result, 0x00)
+		case part == "OP_1":
+			result = append(result, 0x51)
+		case part == "OP_2":
+			result = append(result, 0x52)
+		case part == "OP_CHECKMULTISIG":
+			result = append(result, 0xae)
 		case part == "OP_EQUAL":
 			result = append(result, 0x87)
 		case strings.HasPrefix(part, "OP_PUSHBYTES_"):
