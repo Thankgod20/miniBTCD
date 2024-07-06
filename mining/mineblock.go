@@ -19,6 +19,7 @@ func AddBlock(transactions [][]byte /*[]*trx.Transaction*/, bc *blockchain.Block
 				log.Println("Decode Genesis Hex Error:", err)
 			}
 			bc.Mempool.RemoveTransaction(hex.EncodeToString(segTx.ID))
+			bc.IndexTrx.IndexMempoolSegTransaction(segTx, true)
 			// Check if transaction exists in any block
 			for _, block := range bc.Blocks {
 				if block.VerifyTransaction(segTx.ID) {
@@ -36,6 +37,7 @@ func AddBlock(transactions [][]byte /*[]*trx.Transaction*/, bc *blockchain.Block
 			}
 
 			bc.Mempool.RemoveTransaction(hex.EncodeToString(txn.ID))
+			bc.IndexTrx.IndexMempoolTransaction(txn, true)
 			log.Println("Removing from Mempool:", (hex.EncodeToString(txn.ID)))
 			// Check if transaction exists in any block
 			for _, block := range bc.Blocks {

@@ -13,6 +13,7 @@ import (
 
 type UTXOSet struct {
 	UTXOs map[string]*trx.TXOutput
+	//AddressBalance map[string][]string
 	mutex sync.Mutex
 }
 
@@ -25,15 +26,18 @@ func (u *UTXOSet) AddUTXO(txID string, index int, output *trx.TXOutput) {
 	u.mutex.Lock()
 	defer u.mutex.Unlock()
 	u.UTXOs[fmt.Sprintf("%s:%d", txID, index)] = output
-	log.Println("Updated UTXOs:", txID) //, (u.UTXOs))
+
+	log.Printf("[*] Updated UTXOs: %s", txID) //, (u.UTXOs))
 }
 
 func (u *UTXOSet) RemoveUTXO(txID string, index int) {
 
 	u.mutex.Lock()
 	defer u.mutex.Unlock()
+
 	delete(u.UTXOs, fmt.Sprintf("%s:%d", txID, index))
-	log.Println("Removed from UTXO:", txID)
+
+	log.Printf("Removed from UTXO:%s", txID)
 }
 
 func (u *UTXOSet) FindUTXO(to string, amount int) (map[string]*trx.TXOutput, int) { //(scriptpubKey, pubKeyHash string, amount int) (map[string]*trx.TXOutput, int) {
@@ -142,8 +146,22 @@ func (u *UTXOSet) UTXOAddress(pubKeyHash string, pubkey string, amount int) (map
 
 	total := 0
 	for id, out := range u.UTXOs {
-
+		scriptbyte, err := hex.DecodeString(out.PubKeyHash)
+		if err != nil {
+			log.Println("Error ", err)
+		}
+		scripthash := SingleSha256(scriptbyte)
 		if out.PubKeyHash == pubKeyHash {
+			collected[id] = out
+			//fmt.Println("Public Hash", ownerPubkeyHahs, "Script:", scriptPubkey)
+
+			total += out.Value
+			log.Println("Amount", amount, total)
+			if total > amount {
+				log.Println("break", amount, total)
+				break
+			}
+		} else if hex.EncodeToString(scripthash) == pubKeyHash {
 			collected[id] = out
 			//fmt.Println("Public Hash", ownerPubkeyHahs, "Script:", scriptPubkey)
 
@@ -173,8 +191,17 @@ func (u *UTXOSet) UTXOAddressBalance(pubKeyHash string, pubkey string) (map[stri
 
 	total := 0
 	for id, out := range u.UTXOs {
-
+		scriptbyte, err := hex.DecodeString(out.PubKeyHash)
+		if err != nil {
+			log.Println("Error ", err)
+		}
+		scripthash := SingleSha256(scriptbyte)
 		if out.PubKeyHash == pubKeyHash {
+			collected[id] = out
+			//fmt.Println("Public Hash", ownerPubkeyHahs, "Script:", scriptPubkey)
+			total += out.Value
+
+		} else if hex.EncodeToString(scripthash) == pubKeyHash {
 			collected[id] = out
 			//fmt.Println("Public Hash", ownerPubkeyHahs, "Script:", scriptPubkey)
 			total += out.Value

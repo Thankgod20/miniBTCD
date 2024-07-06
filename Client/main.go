@@ -33,6 +33,7 @@ func main() {
 	bech32 := flag.Bool("bech32", false, "Bech32 Address format")
 	p2PKH := flag.Bool("p2pkh", false, "p2PKH Address format")
 	p2SH := flag.Bool("p2sh", false, "p2SH Address format")
+	full := flag.Bool("full", false, "p2SH Address format")
 	walletTye := flag.String("wallettype", "", "Wallet Type")
 	broadcast := flag.String("broadcast", "", "Wallet Type")
 	verifyHash := flag.String("verifytxID", "", "verify  txID")
@@ -52,8 +53,13 @@ func main() {
 		log.Println("Get Latest Block")
 		getBlock(client, *getblock)
 	case *getTrx != "":
-		log.Println("Verify Transaction")
-		getTrXs(client, *getTrx)
+
+		if *full {
+			getFulTrXs(client, *getTrx)
+		} else {
+			log.Println("Get Transaction")
+			getTrXs(client, *getTrx)
+		}
 	case *verifyHash != "":
 		log.Println("Verify Transaction")
 		verifyTXID(client, *verifyHash)
@@ -135,7 +141,7 @@ func getTrnxHistory(client *rpc.Client, address string) {
 		log.Fatalf("Failed to unmarshal block JSON: %v", err)
 	}*/
 
-	fmt.Println("Latest Block:", reply.TransactionHex) //block)
+	fmt.Println("Trannsactions:", reply.TransactionHex, "Mempool", reply.TransactionHexMempool) //block)
 }
 func getlatestBlock(client *rpc.Client) {
 	args := blockchain.GetLatestBlockArgs{}
@@ -181,6 +187,17 @@ func getTrXs(client *rpc.Client, txID string) {
 	var reply blockchain.GetLatestBlockReply
 
 	err := client.Call("Blockchain.GetTX", &args, &reply)
+	if err != nil {
+		log.Fatalf("Failed to get latest block: %v", err)
+	}
+
+	fmt.Printf("Trans: %+v\n", reply.JSONString)
+}
+func getFulTrXs(client *rpc.Client, txID string) {
+	args := blockchain.GetVerifyTransactionArgs{TransactionID: txID}
+	var reply blockchain.GetLatestBlockReply
+
+	err := client.Call("Blockchain.GetFulTX", &args, &reply)
 	if err != nil {
 		log.Fatalf("Failed to get latest block: %v", err)
 	}

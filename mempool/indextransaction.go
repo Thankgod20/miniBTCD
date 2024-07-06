@@ -1,6 +1,7 @@
 package mempool
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -12,13 +13,16 @@ import (
 )
 
 type IndexTrx struct {
-	AddressTransactionIndex map[string][]string //[][]byte
-	TransactionByID         map[string]string
-	mutex                   sync.Mutex
+	ScriptTransactionIndex            map[string][]string
+	ScriptHashTransactionIndex        map[string][]string
+	ScriptMempoolTransactionIndex     map[string][]string
+	ScriptHashMempoolTransactionIndex map[string][]string
+	TransactionByID                   map[string]string
+	mutex                             sync.Mutex
 }
 
 func NewMIndexTrx() *IndexTrx {
-	return &IndexTrx{AddressTransactionIndex: make(map[string][]string), TransactionByID: make(map[string]string)}
+	return &IndexTrx{ScriptTransactionIndex: make(map[string][]string), ScriptHashTransactionIndex: make(map[string][]string), ScriptMempoolTransactionIndex: make(map[string][]string), ScriptHashMempoolTransactionIndex: make(map[string][]string), TransactionByID: make(map[string]string)}
 }
 func (ntx *IndexTrx) IndexTransaction(tx *trx.Transaction) {
 	ntx.mutex.Lock()
@@ -26,16 +30,40 @@ func (ntx *IndexTrx) IndexTransaction(tx *trx.Transaction) {
 	for _, input := range tx.Inputs {
 
 		address := getAddressFromSig(input)
+		var pubkeyHex []byte
+		//var pubKeyByte
 		//log.Println("Input Address", address)
+		if strings.HasPrefix(address, "1") {
+			// P2PKH address
+			pubkey := GetP2PKHScript(address)
+			log.Printf("Address PubKeyScript:%x", pubkey)
+			pubkeyHex = pubkey
+		} else if strings.HasPrefix(address, "3") {
+			// P2SH address
+			pubkey := GetP2SHScript(address)
+			log.Printf("Address PubKeyScript:%x", pubkey)
+			pubkeyHex = pubkey
+		}
+		scripthash := SingleSha256(pubkeyHex)
 
-		ntx.AddressTransactionIndex[address] = append(ntx.AddressTransactionIndex[address], hex.EncodeToString(tx.ID))
+		ntx.ScriptHashTransactionIndex[hex.EncodeToString(scripthash)] = append(ntx.ScriptHashTransactionIndex[hex.EncodeToString(scripthash)], hex.EncodeToString(tx.ID))
+
+		ntx.ScriptTransactionIndex[hex.EncodeToString(pubkeyHex)] = append(ntx.ScriptTransactionIndex[hex.EncodeToString(pubkeyHex)], hex.EncodeToString(tx.ID))
 	}
 
 	for _, out := range tx.Outputs {
 
-		address := getAddressFromScriptHash(out)
-		//log.Println("Out Address", address)
-		ntx.AddressTransactionIndex[address] = append(ntx.AddressTransactionIndex[address], hex.EncodeToString(tx.ID))
+		address := out.PubKeyHash
+		pubKeyByte, err := hex.DecodeString(address)
+		if err != nil {
+			fmt.Println("Error Converting:", err)
+
+		}
+		scripthash := SingleSha256(pubKeyByte)
+
+		ntx.ScriptHashTransactionIndex[hex.EncodeToString(scripthash)] = append(ntx.ScriptHashTransactionIndex[hex.EncodeToString(scripthash)], hex.EncodeToString(tx.ID))
+
+		ntx.ScriptTransactionIndex[address] = append(ntx.ScriptTransactionIndex[address], hex.EncodeToString(tx.ID))
 	}
 	ntx.TransactionByID[hex.EncodeToString(tx.ID)] = tx.ToString()
 	log.Println("Legacy Transactions Indexed!!!")
@@ -46,18 +74,192 @@ func (ntx *IndexTrx) IndexSegTransaction(tx *trx.SegWit) {
 	for _, input := range tx.Witness {
 
 		address := getSegAddress(input)
-		//log.Println("Input Sign Address", address)
-		ntx.AddressTransactionIndex[address] = append(ntx.AddressTransactionIndex[address], hex.EncodeToString(tx.ID))
+		pubKeyHasg := GetP2PWKHScript(address)
+		pubkeyHex := hex.EncodeToString(pubKeyHasg)
+
+		scripthash := SingleSha256(pubKeyHasg)
+
+		ntx.ScriptHashTransactionIndex[hex.EncodeToString(scripthash)] = append(ntx.ScriptHashTransactionIndex[hex.EncodeToString(scripthash)], hex.EncodeToString(tx.ID))
+
+		ntx.ScriptTransactionIndex[pubkeyHex] = append(ntx.ScriptTransactionIndex[pubkeyHex], hex.EncodeToString(tx.ID))
+		log.Printf("Address PubKeyScript:%x", pubKeyHasg)
 	}
 
 	for _, out := range tx.Outputs {
 
-		address := getAddressFromScriptHash(out)
-		//log.Println("Out Sign Address", address)
-		ntx.AddressTransactionIndex[address] = append(ntx.AddressTransactionIndex[address], hex.EncodeToString(tx.ID))
+		address := out.PubKeyHash
+		pubKeyByte, err := hex.DecodeString(address)
+		if err != nil {
+			fmt.Println("Error Converting:", err)
+
+		}
+		scripthash := SingleSha256(pubKeyByte)
+
+		ntx.ScriptHashTransactionIndex[hex.EncodeToString(scripthash)] = append(ntx.ScriptHashTransactionIndex[hex.EncodeToString(scripthash)], hex.EncodeToString(tx.ID))
+
+		ntx.ScriptTransactionIndex[address] = append(ntx.ScriptTransactionIndex[address], hex.EncodeToString(tx.ID))
 	}
+
 	ntx.TransactionByID[hex.EncodeToString(tx.ID)] = tx.ToString()
 	log.Println("SegWit Transactions Indexed!!!")
+}
+func (ntx *IndexTrx) IndexMempoolTransaction(tx *trx.Transaction, isDelete bool) {
+	ntx.mutex.Lock()
+	defer ntx.mutex.Unlock()
+	for _, input := range tx.Inputs {
+
+		address := getAddressFromSig(input)
+		var pubkeyHex []byte
+		//var pubKeyByte
+		//log.Println("Input Address", address)
+		if strings.HasPrefix(address, "1") {
+			// P2PKH address
+			pubkey := GetP2PKHScript(address)
+			log.Printf("Address PubKeyScript:%x", pubkey)
+			pubkeyHex = pubkey
+		} else if strings.HasPrefix(address, "3") {
+			// P2SH address
+			pubkey := GetP2SHScript(address)
+			log.Printf("Address PubKeyScript:%x", pubkey)
+			pubkeyHex = pubkey
+		}
+		scripthash := SingleSha256(pubkeyHex)
+		if isDelete {
+			delete(ntx.ScriptHashMempoolTransactionIndex, hex.EncodeToString(scripthash))
+			delete(ntx.ScriptMempoolTransactionIndex, hex.EncodeToString(pubkeyHex))
+		} else {
+			log.Println("hex.EncodeToString(scripthash)", hex.EncodeToString(scripthash), "TxID", hex.EncodeToString(tx.ID))
+
+			ntx.ScriptHashMempoolTransactionIndex[hex.EncodeToString(scripthash)] = append(ntx.ScriptHashMempoolTransactionIndex[hex.EncodeToString(scripthash)], hex.EncodeToString(tx.ID))
+
+			ntx.ScriptMempoolTransactionIndex[hex.EncodeToString(pubkeyHex)] = append(ntx.ScriptMempoolTransactionIndex[hex.EncodeToString(pubkeyHex)], hex.EncodeToString(tx.ID))
+		}
+	}
+
+	for _, out := range tx.Outputs {
+
+		address := out.PubKeyHash
+		pubKeyByte, err := hex.DecodeString(address)
+		if err != nil {
+			fmt.Println("Error Converting:", err)
+
+		}
+		scripthash := SingleSha256(pubKeyByte)
+		if isDelete {
+			delete(ntx.ScriptHashMempoolTransactionIndex, hex.EncodeToString(scripthash))
+			delete(ntx.ScriptMempoolTransactionIndex, address)
+		} else {
+			ntx.ScriptHashMempoolTransactionIndex[hex.EncodeToString(scripthash)] = append(ntx.ScriptHashMempoolTransactionIndex[hex.EncodeToString(scripthash)], hex.EncodeToString(tx.ID))
+
+			ntx.ScriptMempoolTransactionIndex[address] = append(ntx.ScriptMempoolTransactionIndex[address], hex.EncodeToString(tx.ID))
+		}
+	}
+	//ntx.TransactionByID[hex.EncodeToString(tx.ID)] = tx.ToString()
+	log.Println("Legacy Transactions Indexed!!!")
+}
+func (ntx *IndexTrx) IndexMempoolSegTransaction(tx *trx.SegWit, isDelete bool) {
+	ntx.mutex.Lock()
+	defer ntx.mutex.Unlock()
+	for _, input := range tx.Witness {
+
+		address := getSegAddress(input)
+		pubKeyHasg := GetP2PWKHScript(address)
+		pubkeyHex := hex.EncodeToString(pubKeyHasg)
+
+		scripthash := SingleSha256(pubKeyHasg)
+		if isDelete {
+			delete(ntx.ScriptHashMempoolTransactionIndex, hex.EncodeToString(scripthash))
+			delete(ntx.ScriptMempoolTransactionIndex, pubkeyHex)
+		} else {
+			ntx.ScriptHashMempoolTransactionIndex[hex.EncodeToString(scripthash)] = append(ntx.ScriptHashMempoolTransactionIndex[hex.EncodeToString(scripthash)], hex.EncodeToString(tx.ID))
+
+			ntx.ScriptMempoolTransactionIndex[pubkeyHex] = append(ntx.ScriptMempoolTransactionIndex[pubkeyHex], hex.EncodeToString(tx.ID))
+			log.Printf("Address PubKeyScript:%x", pubKeyHasg)
+		}
+	}
+
+	for _, out := range tx.Outputs {
+
+		address := out.PubKeyHash
+		pubKeyByte, err := hex.DecodeString(address)
+		if err != nil {
+			fmt.Println("Error Converting:", err)
+
+		}
+		scripthash := SingleSha256(pubKeyByte)
+		if isDelete {
+			delete(ntx.ScriptHashMempoolTransactionIndex, hex.EncodeToString(scripthash))
+			delete(ntx.ScriptMempoolTransactionIndex, address)
+		} else {
+			ntx.ScriptHashMempoolTransactionIndex[hex.EncodeToString(scripthash)] = append(ntx.ScriptHashMempoolTransactionIndex[hex.EncodeToString(scripthash)], hex.EncodeToString(tx.ID))
+
+			ntx.ScriptMempoolTransactionIndex[address] = append(ntx.ScriptMempoolTransactionIndex[address], hex.EncodeToString(tx.ID))
+		}
+	}
+
+	//ntx.TransactionByID[hex.EncodeToString(tx.ID)] = tx.ToString()
+	log.Println("SegWit Transactions Indexed!!!")
+}
+func GetP2PWKHScript(address string) []byte {
+	_, r_pubKey, _ := wallet.DecodeBech32(address)
+	decodedData, err := trx.ConvertBits(r_pubKey[1:], 5, 8, false)
+	if err != nil {
+		fmt.Println("Error Converting:", err)
+		return nil
+	}
+	pubLen := byte(len(decodedData))
+	outputs := "OP_0 OP_PUSHBYTES_20 /" + hex.EncodeToString(decodedData) + "/"
+	pubkey, err := trx.DecodeScriptPubKey(outputs, pubLen)
+	if err != nil {
+		fmt.Println("Error Converting:", err)
+		return nil
+	}
+	return pubkey
+}
+func SingleSha256(data []byte) []byte {
+	sha := sha256.Sum256(data)
+	//sha_two := sha256.Sum256(sha[:])
+	return sha[:] //ripemd.Sum(nil)
+}
+func GetP2PKHScript(address string) []byte {
+	r_pubKey, err := wallet.Base58Decode(address)
+	if err != nil {
+		fmt.Println("Error Converting:", err)
+		return nil
+	}
+	pubByte, err := hex.DecodeString(hex.EncodeToString(r_pubKey)[2:42])
+	if err != nil {
+		fmt.Println("Error Converting:", err)
+		return nil
+	}
+	pubLen := byte(len(pubByte))
+	outputs := "OP_DUP OP_HASH160 OP_PUSHBYTES_20 /" + hex.EncodeToString(r_pubKey)[2:42] + "/ OP_EQUALVERIFY OP_CHECKSIG"
+	pubkey, err := trx.DecodeScriptPubKey(outputs, pubLen)
+	if err != nil {
+		fmt.Println("Error Converting:", err)
+		return nil
+	}
+	return pubkey
+}
+func GetP2SHScript(address string) []byte {
+	r_pubKey, err := wallet.Base58Decode(address)
+	if err != nil {
+		fmt.Println("Error Converting:", err)
+		return nil
+	}
+	pubByte, err := hex.DecodeString(hex.EncodeToString(r_pubKey)[2:42])
+	if err != nil {
+		fmt.Println("Error Converting:", err)
+		return nil
+	}
+	pubLen := byte(len(pubByte))
+	outputs := "OP_HASH160 OP_PUSHBYTES_20 /" + hex.EncodeToString(r_pubKey)[2:42] + "/ OP_EQUAL"
+	pubkey, err := trx.DecodeScriptPubKey(outputs, pubLen)
+	if err != nil {
+		fmt.Println("Error Converting:", err)
+		return nil
+	}
+	return pubkey
 }
 func getAddressFromScriptHash(out trx.TXOutput) string {
 	//Process ScriptPubKeyHash
@@ -104,6 +306,7 @@ func getSegAddress(witness [][]byte) string {
 }
 func getAddressFromSig(input trx.TXInput) string {
 	var address string
+
 	//signature
 	if input.Sig[:2] == "47" {
 		sliptSig := strings.Split(input.Sig[2:], "0121")

@@ -44,6 +44,7 @@ func (m *Mempool) AddTransaction(tx *trx.Transaction) {
 	if err != nil {
 		log.Println("Error Converting DecodeString to Hex AddTransaction:", err)
 	}
+
 	m.transactions[hex.EncodeToString(tx.ID)] = &trxbyte
 	log.Printf("Trnx: %s Added Mempool", hex.EncodeToString(tx.ID))
 }

@@ -9,6 +9,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/Thankgod20/miniBTCD/mempool"
 	"github.com/Thankgod20/miniBTCD/trx"
 )
 
@@ -19,7 +20,8 @@ type GetAddressHistoryArgs struct {
 	Address string
 }
 type GetAddressHistoryReply struct {
-	TransactionHex []string
+	TransactionHexMempool []string
+	TransactionHex        []string
 }
 type GetTransactionsArgs struct {
 	//Transactions *trx.Transaction
@@ -74,7 +76,19 @@ func (bc *Blockchain) GetCurrentHeight(args *GetLatestBlockArgs, reply *GetLates
 	reply.JSONBlock = jsonBlock
 	return nil
 }
+func (bc *Blockchain) GetBalanceWitScripttHash(args *GetBalanceArgs, reply *GetLatestBlockReply) error {
+	var scriptpubKey string = args.Address
+	var publickeyhash string = ""
+	var coinbase string = ""
+	_, total := bc.UTXOSet.UTXOAddressBalance(scriptpubKey, coinbase+publickeyhash)
 
+	jsonBlock, err := json.Marshal(total)
+	if err != nil {
+		return errors.New("failed to marshal block")
+	}
+	reply.JSONBlock = jsonBlock
+	return nil
+}
 func (bc *Blockchain) GetBalance(args *GetBalanceArgs, reply *GetLatestBlockReply) error {
 	var scriptpubKey string
 	var publickeyhash string
@@ -286,43 +300,65 @@ func (bc *Blockchain) VerifyTX(args *GetTransactionReply, reply *GetLatestBlockR
 	}
 	return nil
 }
+func (bc *Blockchain) GetFulTX(args *GetTransactionReply, reply *GetLatestBlockReply) error {
+	//var isExist bool
+
+	for _, block := range bc.Blocks {
+
+		for _, txDetail := range block.Transactions {
+			if IsSegWitTransaction(txDetail) {
+				txS := hex.EncodeToString(txDetail)
+				segTx, err := trx.FromSegWitHex(txS)
+				if err != nil {
+					log.Println("Decode Genesis Hex Error:", err)
+				}
+				if hex.EncodeToString(segTx.ID) == args.TransactionID {
+					var lines []string
+					lines = append(lines, fmt.Sprintf("BlockHash: %x", block.Hash))
+					lines = append(lines, fmt.Sprintf("Hex: %x", block.SerializeHeader()))
+					lines = append(lines, fmt.Sprintf("Confirmations: %d", ((bc.Blocks[len(bc.Blocks)-1].Height-block.Height)+1)))
+					lines = append(lines, fmt.Sprintf("Size: %x", byte(len(block.SerializeHeader()))))
+					lines = append(lines, fmt.Sprintf("Hash: %x", segTx.ID))
+					lines = append(lines, fmt.Sprintf("Time: %d", block.Timestamp))
+					lines = append(lines, segTx.ToString())
+					reply.JSONString = strings.Join(lines, "\n") //("True")
+					log.Println("Transaction exists in the blockchain.")
+					break
+				}
+			} else {
+				txS := hex.EncodeToString(txDetail)
+				trnx, err := trx.FromHex(txS)
+				if err != nil {
+					log.Println("Decode Genesis Hex Error:", err)
+				}
+				if hex.EncodeToString(trnx.ID) == args.TransactionID {
+					var lines []string
+					lines = append(lines, fmt.Sprintf("BlockHash: %x", block.Hash))
+					lines = append(lines, fmt.Sprintf("Hex: %x", block.SerializeHeader()))
+					lines = append(lines, fmt.Sprintf("Size: %x", byte(len(block.SerializeHeader()))))
+					lines = append(lines, fmt.Sprintf("Confirmations: %d", ((bc.Blocks[len(bc.Blocks)-1].Height-block.Height)+1)))
+					lines = append(lines, fmt.Sprintf("Hash: %x", trnx.ID))
+					lines = append(lines, fmt.Sprintf("Time: %d", block.Timestamp))
+					lines = append(lines, trnx.ToString())
+					reply.JSONString = strings.Join(lines, "\n")
+					//reply.JSONString = trnx.ToString() //("True")
+					log.Println("Transaction exists in the blockchain.")
+					break
+				}
+
+			}
+		}
+
+	}
+	return nil
+}
 func (bc *Blockchain) GetTX(args *GetTransactionReply, reply *GetLatestBlockReply) error {
 	//var isExist bool
 	if txs, exists := bc.IndexTrx.TransactionByID[args.TransactionID]; exists {
 		//return txIDs
 		reply.JSONString = txs
 	}
-	/*
-		for _, block := range bc.Blocks {
 
-			for _, txDetail := range block.Transactions {
-				if IsSegWitTransaction(txDetail) {
-					txS := hex.EncodeToString(txDetail)
-					segTx, err := trx.FromSegWitHex(txS)
-					if err != nil {
-						log.Println("Decode Genesis Hex Error:", err)
-					}
-					if hex.EncodeToString(segTx.ID) == args.TransactionID {
-						reply.JSONString = segTx.ToString() //("True")
-						log.Println("Transaction exists in the blockchain.")
-						break
-					}
-				} else {
-					txS := hex.EncodeToString(txDetail)
-					trnx, err := trx.FromHex(txS)
-					if err != nil {
-						log.Println("Decode Genesis Hex Error:", err)
-					}
-					if hex.EncodeToString(trnx.ID) == args.TransactionID {
-						reply.JSONString = trnx.ToString() //("True")
-						log.Println("Transaction exists in the blockchain.")
-						break
-					}
-
-				}
-			}
-
-		}*/
 	return nil
 }
 func (bc *Blockchain) GetBlockRPC(args *GetBlockArgs, reply *GetBlockReply) error {
@@ -335,9 +371,39 @@ func (bc *Blockchain) GetBlockRPC(args *GetBlockArgs, reply *GetBlockReply) erro
 }
 func (bc *Blockchain) GetTransactionHistory(args *GetAddressHistoryArgs, reply *GetAddressHistoryReply) error {
 	//bc.IndexTrx[args.Address]
-	if txIDs, exists := bc.IndexTrx.AddressTransactionIndex[args.Address]; exists {
+	var pubkeyHex string
+	if strings.HasPrefix(args.Address, "1") {
+		// P2PKH address
+		pubkey := mempool.GetP2PKHScript(args.Address)
+		pubkeyHex = hex.EncodeToString(pubkey)
+		log.Printf("Address PubKeyScript:%x", pubkey)
+	} else if strings.HasPrefix(args.Address, "3") {
+		// P2SH address
+		pubkey := mempool.GetP2SHScript(args.Address)
+		pubkeyHex = hex.EncodeToString(pubkey)
+		log.Printf("Address PubKeyScript:%x", pubkey)
+	} else if strings.HasPrefix(args.Address, "bc1") {
+		pubkey := mempool.GetP2PWKHScript(args.Address)
+		pubkeyHex = hex.EncodeToString(pubkey)
+		log.Printf("Address PubKeyScript:%x", pubkey)
+	} else {
+		if txIDs, exists := bc.IndexTrx.ScriptHashTransactionIndex[pubkeyHex]; exists {
+			//return txIDs
+			reply.TransactionHex = txIDs
+		}
+		if memtxIDs, exists := bc.IndexTrx.ScriptHashMempoolTransactionIndex[pubkeyHex]; exists {
+			//return txIDs
+			reply.TransactionHexMempool = memtxIDs
+		}
+		return nil
+	}
+	if txIDs, exists := bc.IndexTrx.ScriptTransactionIndex[pubkeyHex]; exists {
 		//return txIDs
 		reply.TransactionHex = txIDs
+	}
+	if memtxIDs, exists := bc.IndexTrx.ScriptMempoolTransactionIndex[pubkeyHex]; exists {
+		//return txIDs
+		reply.TransactionHexMempool = memtxIDs
 	}
 	return nil
 }
@@ -369,6 +435,7 @@ func (bc *Blockchain) AddToMempool(args *GetTransactionsArgs, reply *GetLatestBl
 		report := bc.Mempool.SubmitSegWitTransaction(txn, untxn, bc.UTXOSet)
 		txn.ToHex(true)
 		if report == "Successful" {
+			bc.IndexTrx.IndexMempoolSegTransaction(untxn, false)
 			for _, in := range trnkeep.Inputs {
 				//fmt.Println("Removing from Mempool:", (hex.EncodeToString(in.ID)))
 				if len(hex.EncodeToString(in.ID)) > 0 {
@@ -397,6 +464,7 @@ func (bc *Blockchain) AddToMempool(args *GetTransactionsArgs, reply *GetLatestBl
 		report := bc.Mempool.SubmitTransaction(txn, untxn, bc.UTXOSet)
 		txn.ToHex(true)
 		if report == "Successful" {
+			bc.IndexTrx.IndexMempoolTransaction(untxn, false)
 			for _, in := range trnkeep.Inputs {
 				//fmt.Println("Removing from Mempool:", (hex.EncodeToString(in.ID)))
 				if len(hex.EncodeToString(in.ID)) > 0 {
