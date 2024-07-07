@@ -89,6 +89,19 @@ func (bc *Blockchain) GetBalanceWitScripttHash(args *GetBalanceArgs, reply *GetL
 	reply.JSONBlock = jsonBlock
 	return nil
 }
+func (bc *Blockchain) GetBalanceByHash(args *GetBalanceArgs, reply *GetLatestBlockReply) error {
+	var scriptpubKey string = args.Address
+	var publickeyhash string = ""
+	var coinbase string = ""
+	_, total := bc.UTXOSet.UTXOAddressBalance(scriptpubKey, coinbase+publickeyhash)
+
+	jsonBlock, err := json.Marshal(total)
+	if err != nil {
+		return errors.New("failed to marshal block")
+	}
+	reply.JSONBlock = jsonBlock
+	return nil
+}
 func (bc *Blockchain) GetBalance(args *GetBalanceArgs, reply *GetLatestBlockReply) error {
 	var scriptpubKey string
 	var publickeyhash string
@@ -315,6 +328,7 @@ func (bc *Blockchain) GetFulTX(args *GetTransactionReply, reply *GetLatestBlockR
 				if hex.EncodeToString(segTx.ID) == args.TransactionID {
 					var lines []string
 					lines = append(lines, fmt.Sprintf("BlockHash: %x", block.Hash))
+					lines = append(lines, fmt.Sprintf("Height: %d", block.Height))
 					lines = append(lines, fmt.Sprintf("Hex: %x", block.SerializeHeader()))
 					lines = append(lines, fmt.Sprintf("Confirmations: %d", ((bc.Blocks[len(bc.Blocks)-1].Height-block.Height)+1)))
 					lines = append(lines, fmt.Sprintf("Size: %x", byte(len(block.SerializeHeader()))))
@@ -334,6 +348,7 @@ func (bc *Blockchain) GetFulTX(args *GetTransactionReply, reply *GetLatestBlockR
 				if hex.EncodeToString(trnx.ID) == args.TransactionID {
 					var lines []string
 					lines = append(lines, fmt.Sprintf("BlockHash: %x", block.Hash))
+					lines = append(lines, fmt.Sprintf("Height: %d", block.Height))
 					lines = append(lines, fmt.Sprintf("Hex: %x", block.SerializeHeader()))
 					lines = append(lines, fmt.Sprintf("Size: %x", byte(len(block.SerializeHeader()))))
 					lines = append(lines, fmt.Sprintf("Confirmations: %d", ((bc.Blocks[len(bc.Blocks)-1].Height-block.Height)+1)))
@@ -372,12 +387,12 @@ func (bc *Blockchain) GetBlockRPC(args *GetBlockArgs, reply *GetBlockReply) erro
 func (bc *Blockchain) GetTransactionHistory(args *GetAddressHistoryArgs, reply *GetAddressHistoryReply) error {
 	//bc.IndexTrx[args.Address]
 	var pubkeyHex string
-	if strings.HasPrefix(args.Address, "1") {
+	if strings.HasPrefix(args.Address, "1") && len(args.Address) == len("3Ag5RYpyspx4j8q9HFY1aJA3nLcK25AFHy") {
 		// P2PKH address
 		pubkey := mempool.GetP2PKHScript(args.Address)
 		pubkeyHex = hex.EncodeToString(pubkey)
 		log.Printf("Address PubKeyScript:%x", pubkey)
-	} else if strings.HasPrefix(args.Address, "3") {
+	} else if strings.HasPrefix(args.Address, "3") && len(args.Address) == len("3Ag5RYpyspx4j8q9HFY1aJA3nLcK25AFHy") {
 		// P2SH address
 		pubkey := mempool.GetP2SHScript(args.Address)
 		pubkeyHex = hex.EncodeToString(pubkey)
@@ -387,11 +402,13 @@ func (bc *Blockchain) GetTransactionHistory(args *GetAddressHistoryArgs, reply *
 		pubkeyHex = hex.EncodeToString(pubkey)
 		log.Printf("Address PubKeyScript:%x", pubkey)
 	} else {
-		if txIDs, exists := bc.IndexTrx.ScriptHashTransactionIndex[pubkeyHex]; exists {
+		scriptHash, _ := hex.DecodeString(args.Address)
+		reversed := trx.ReverseBytes(scriptHash)
+		if txIDs, exists := bc.IndexTrx.ScriptHashTransactionIndex[hex.EncodeToString(reversed)]; exists {
 			//return txIDs
 			reply.TransactionHex = txIDs
 		}
-		if memtxIDs, exists := bc.IndexTrx.ScriptHashMempoolTransactionIndex[pubkeyHex]; exists {
+		if memtxIDs, exists := bc.IndexTrx.ScriptHashMempoolTransactionIndex[hex.EncodeToString(reversed)]; exists {
 			//return txIDs
 			reply.TransactionHexMempool = memtxIDs
 		}
@@ -406,6 +423,25 @@ func (bc *Blockchain) GetTransactionHistory(args *GetAddressHistoryArgs, reply *
 		reply.TransactionHexMempool = memtxIDs
 	}
 	return nil
+}
+func (bc *Blockchain) GetTransactionHistoryScriptHash(args *GetAddressHistoryArgs, reply *GetAddressHistoryReply) error {
+	//bc.IndexTrx[args.Address]
+
+	scriptHash, _ := hex.DecodeString(args.Address)
+	reversed := trx.ReverseBytes(scriptHash)
+	log.Printf("Getting Transaction History for reversed %x of %s ", reversed, args.Address)
+	if txIDs, exists := bc.IndexTrx.ScriptHashTransactionIndex[hex.EncodeToString(reversed)]; exists {
+		//return txIDs
+		log.Println("Transaction Found for:", args.Address)
+		reply.TransactionHex = txIDs
+	}
+	if memtxIDs, exists := bc.IndexTrx.ScriptHashMempoolTransactionIndex[hex.EncodeToString(reversed)]; exists {
+		//return txIDs
+		log.Println("Transaction Mempool Found for:", args.Address)
+		reply.TransactionHexMempool = memtxIDs
+	}
+	return nil
+
 }
 func (bc *Blockchain) AddToMempool(args *GetTransactionsArgs, reply *GetLatestBlockReply) error {
 	log.Println("[*][*] Reciving Request to Add Trnx to Mempool ....")

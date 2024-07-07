@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"log"
 	"net/rpc"
+	"strings"
 
 	"github.com/Thankgod20/miniBTCD/blockchain"
+	"github.com/Thankgod20/miniBTCD/mempool"
 	"github.com/Thankgod20/miniBTCD/trx"
 	"github.com/Thankgod20/miniBTCD/wallet"
 )
@@ -35,6 +37,7 @@ func main() {
 	p2SH := flag.Bool("p2sh", false, "p2SH Address format")
 	full := flag.Bool("full", false, "p2SH Address format")
 	walletTye := flag.String("wallettype", "", "Wallet Type")
+	scripthash := flag.String("scripthash", "", "Wallet Type")
 	broadcast := flag.String("broadcast", "", "Wallet Type")
 	verifyHash := flag.String("verifytxID", "", "verify  txID")
 	getTrx := flag.String("getTrx", "", "Get  txID")
@@ -49,6 +52,9 @@ func main() {
 	case *getaddrhistry != "":
 		log.Println("Get Address History")
 		getTrnxHistory(client, *getaddrhistry)
+	case *scripthash != "":
+		log.Println("Get ScriptHash ")
+		getScriptHast(*scripthash)
 	case *getblock != "":
 		log.Println("Get Latest Block")
 		getBlock(client, *getblock)
@@ -125,6 +131,29 @@ func main() {
 		log.Println("Usage <client.go> --<options>. Please use --latestblock.")
 	}
 
+}
+func getScriptHast(address string) {
+	if strings.HasPrefix(address, "1") {
+		// P2PKH address
+		pubkey := mempool.GetP2PKHScript(address)
+		//pubkeyHex = hex.EncodeToString(pubkey)
+		log.Printf("Address PubKeyScript:%x", pubkey)
+		log.Printf("Address ScriptHash:%x", mempool.SingleSha256(pubkey))
+		log.Printf("Address ScriptHash Electrun:%x", trx.ReverseBytes(mempool.SingleSha256(pubkey)))
+	} else if strings.HasPrefix(address, "3") {
+		// P2SH address
+		pubkey := mempool.GetP2SHScript(address)
+		//pubkeyHex = hex.EncodeToString(pubkey)
+		log.Printf("Address PubKeyScript:%x", pubkey)
+		log.Printf("Address ScriptHash:%x", mempool.SingleSha256(pubkey))
+		log.Printf("Address ScriptHash Electrun:%x", trx.ReverseBytes(mempool.SingleSha256(pubkey)))
+	} else if strings.HasPrefix(address, "bc1") {
+		pubkey := mempool.GetP2PWKHScript(address)
+		//	pubkeyHex = hex.EncodeToString(pubkey)
+		log.Printf("Address PubKeyScript:%x", pubkey)
+		log.Printf("Address ScriptHash:%x", mempool.SingleSha256(pubkey))
+		log.Printf("Address ScriptHash Electrun:%x", trx.ReverseBytes(mempool.SingleSha256(pubkey)))
+	}
 }
 func getTrnxHistory(client *rpc.Client, address string) {
 	args := blockchain.GetAddressHistoryArgs{Address: address}
