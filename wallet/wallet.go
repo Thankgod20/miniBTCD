@@ -63,6 +63,13 @@ func NewWalletFromSeed(seed string) (*Wallet, error) {
 	if err != nil {
 		return nil, err
 	}
+	var publicKey []byte
+	if private.PublicKey.Y.Bit(0) == 0 {
+		publicKey = append([]byte{0x02}, private.PublicKey.X.Bytes()...)
+	} else {
+		publicKey = append([]byte{0x03}, private.PublicKey.X.Bytes()...)
+	}
+	fmt.Printf("Private Key: %x, public key %x\n", private.D.Bytes(), publicKey)
 	wallet := Wallet{private, public, address}
 	return &wallet, nil
 }
@@ -126,7 +133,7 @@ func (w *Wallet) CreateTransaction(to string, amount int, fee float64, collected
 	//tx.SetID()
 	//w.Sign(tx)
 
-	segWit, tx, hexx, pubKeyHash, err := w.rawTrnx(to, amount, fee, collected)
+	segWit, tx, hexx, pubKeyHash, txoPubHash, err := w.rawTrnx(to, amount, fee, collected)
 	if err != nil {
 
 		log.Println("Error Initaitng Trnx:", err)
@@ -135,7 +142,7 @@ func (w *Wallet) CreateTransaction(to string, amount int, fee float64, collected
 	if tx != nil {
 		rawHex := hexx + "01000000"
 
-		signedTrx := w.Sign(tx, rawHex, pubKeyHash)
+		signedTrx := w.Sign(tx, rawHex, pubKeyHash, txoPubHash)
 
 		signTrxHex_, err := signedTrx.ToHex(true)
 		if err != nil {
@@ -160,7 +167,7 @@ func (w *Wallet) CreateTransaction(to string, amount int, fee float64, collected
 	}
 	return signTrxHex, nil
 }
-func (w *Wallet) rawTrnx(to string, amount int, fee float64, collected map[string]*trx.TXOutput /**mempool.UTXOSet*/) (*trx.SegWit, *trx.Transaction, string, string, error) {
+func (w *Wallet) rawTrnx(to string, amount int, fee float64, collected map[string]*trx.TXOutput /**mempool.UTXOSet*/) (*trx.SegWit, *trx.Transaction, string, string, []string, error) {
 	//Wallet address to publicKeyHash
 
 	var pubKeyHashStr string
@@ -235,13 +242,15 @@ func (w *Wallet) rawTrnx(to string, amount int, fee float64, collected map[strin
 	// Find enough UTXOs to cover the amount
 	//collected, total := utxoSet.FindUTXO(w.Address, amount) //(scriptpubKey, coinbase+pubKeyHashStr, amount)
 	total := 0
+	var txoPubHash []string
 	for _, output := range collected {
 		//fmt.Println("OutpUt", output.Value)
+		txoPubHash = append(txoPubHash, output.PubKeyHash)
 		total += output.Value
 	}
 	log.Println("Wallet Balance", total)
 	if total < (amount * SatoshiPerBitcoin) {
-		return nil, nil, "", "", errors.New("not enough funds")
+		return nil, nil, "", "", nil, errors.New("not enough funds")
 	}
 	var inputs []trx.TXInput
 	var outputs []trx.TXOutput
@@ -291,11 +300,11 @@ func (w *Wallet) rawTrnx(to string, amount int, fee float64, collected map[strin
 		decodedData, err := convertBits(r_pubKey[1:], 5, 8, false)
 		if err != nil {
 			fmt.Println("Error Converting:", err)
-			return nil, nil, "", "", err
+			return nil, nil, "", "", nil, err
 		}
 		outputs = append(outputs, trx.TXOutput{Value: (amount * SatoshiPerBitcoin) - feeTig, PubKeyHash: "OP_0 OP_PUSHBYTES_20 /" + hex.EncodeToString(decodedData) + "/"})
 	} else {
-		return nil, nil, "", "", errors.New("invalid address type")
+		return nil, nil, "", "", nil, errors.New("invalid address type")
 	}
 	// If there's change, send it back to the wallet address
 	if total > (amount * SatoshiPerBitcoin) {
@@ -312,7 +321,7 @@ func (w *Wallet) rawTrnx(to string, amount int, fee float64, collected map[strin
 
 			outputs = append(outputs, trx.TXOutput{Value: total - (amount * SatoshiPerBitcoin) - feeEx, PubKeyHash: "OP_0 OP_PUSHBYTES_20 /" + pubKeyHashStr + "/"})
 		} else {
-			return nil, nil, "", "", errors.New("invalid address type")
+			return nil, nil, "", "", nil, errors.New("invalid address type")
 		}
 		//outputs = append(outputs, trx.TXOutput{Value: total - (amount * SatoshiPerBitcoin), PubKeyHash: pubKeyHashStr})
 	}
@@ -323,7 +332,7 @@ func (w *Wallet) rawTrnx(to string, amount int, fee float64, collected map[strin
 		if err != nil {
 			log.Println("Error Hexing", err)
 		}
-		return tx, nil, to_hex, pubKeyHashStr, nil
+		return tx, nil, to_hex, pubKeyHashStr, txoPubHash, nil
 
 	} else {
 		tx := &trx.Transaction{Version: 2, Inputs: inputs, Outputs: outputs}
@@ -332,12 +341,19 @@ func (w *Wallet) rawTrnx(to string, amount int, fee float64, collected map[strin
 			log.Println("Error Hexing", err)
 		}
 		//fmt.Println("Transction Hash", hex.EncodeToString(tx.Hash()))
-		return nil, tx, to_hex, pubKeyHashStr, nil
+		return nil, tx, to_hex, pubKeyHashStr, txoPubHash, nil
 	}
 }
-func (w *Wallet) Sign(tx *trx.Transaction, trnxhex string, publicKeyHash string) *trx.Transaction {
+func (w *Wallet) Sign(tx *trx.Transaction, trnxhexx string, publicKeyHash string, txoPubHash []string) *trx.Transaction {
+	var signature []string
 	for i, _ := range tx.Inputs {
-		toBytes, err := hex.DecodeString(trnxhex) //tx.Hash()
+		for i, _ := range tx.Inputs {
+			tx.Inputs[i].Sig = ""
+		}
+		tx.Inputs[i].Sig = txoPubHash[i]
+		trnxhex, _ := tx.ToHex(true)
+		log.Println("First Signing:", trnxhex)
+		toBytes, err := hex.DecodeString(trnxhex + "01000000") //tx.Hash()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -362,7 +378,8 @@ func (w *Wallet) Sign(tx *trx.Transaction, trnxhex string, publicKeyHash string)
 			return nil
 		}
 
-		signature := hex.EncodeToString(derBytes) + "01"
+		signature_ := hex.EncodeToString(derBytes) + "01"
+		signature = append(signature, signature_)
 		//log.Println("Signature DEREND:-", signature, i, r, s, publicKeyHash)
 
 		// Get the public key in uncompressed format
@@ -372,6 +389,10 @@ func (w *Wallet) Sign(tx *trx.Transaction, trnxhex string, publicKeyHash string)
 
 		//compressed format of the public key
 		// Get the public key in compressed format
+
+	}
+
+	for i, _ := range tx.Inputs {
 		var publicKey []byte
 		if w.PrivateKey.PublicKey.Y.Bit(0) == 0 {
 			publicKey = append([]byte{0x02}, w.PrivateKey.PublicKey.X.Bytes()...)
@@ -379,9 +400,9 @@ func (w *Wallet) Sign(tx *trx.Transaction, trnxhex string, publicKeyHash string)
 			publicKey = append([]byte{0x03}, w.PrivateKey.PublicKey.X.Bytes()...)
 		}
 		if strings.HasPrefix(w.Address, "1") {
-			tx.Inputs[i].Sig = "OP_PUSHBYTES_71 /" + signature + "/ OP_PUSHBYTES_33 /" + hex.EncodeToString(publicKey) + "/" //hex.EncodeToString(signature)
+			tx.Inputs[i].Sig = "OP_PUSHBYTES_71 /" + signature[i] + "/ OP_PUSHBYTES_33 /" + hex.EncodeToString(publicKey) + "/" //hex.EncodeToString(signature)
 		} else {
-			tx.Inputs[i].Sig = "OP_0 OP_PUSHBYTES_71 /" + signature + "/ OP_PUSHBYTES_71 OP_1 OP_PUSHBYTES_33 /" + hex.EncodeToString(publicKey) + "/ OP_2 OP_CHECKMULTISIG"
+			tx.Inputs[i].Sig = "OP_0 OP_PUSHBYTES_71 /" + signature[i] + "/ OP_PUSHBYTES_71 OP_1 OP_PUSHBYTES_33 /" + hex.EncodeToString(publicKey) + "/ OP_2 OP_CHECKMULTISIG"
 		}
 	}
 	return tx

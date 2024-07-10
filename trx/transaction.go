@@ -666,28 +666,73 @@ func FromHex(txHex string) (*Transaction, error) {
 func computeTransactionID(txBytes []byte) []byte {
 	hash1 := sha256.Sum256(txBytes)
 	hash2 := sha256.Sum256(hash1[:])
-	return hash2[:]
+	txID := ReverseBytes(hash2[:])
+	//log.Printf("Treanscion:%x\n", txID)
+	return txID
 }
 
 // String converts a Transaction object to a string representation
 func (tx *Transaction) ToString() string {
 	var lines []string
 
-	lines = append(lines, fmt.Sprintf("Transaction ID: %x", tx.ID))
-	lines = append(lines, fmt.Sprintf("Version: %d", tx.Version))
+	//lines = append(lines, fmt.Sprintf("Transaction ID: %x", tx.ID))
+	lines = append(lines, fmt.Sprintf("\"version\": %d,", tx.Version))
+	lines = append(lines, fmt.Sprintf("\"locktime\": %d,", tx.Locktime))
+	lines = append(lines, ("\"vin\": ["))
 	for i, input := range tx.Inputs {
-		lines = append(lines, fmt.Sprintf("  Input %d:", i))
-		lines = append(lines, fmt.Sprintf("    TXID:      %x", input.ID))
-		lines = append(lines, fmt.Sprintf("    Out:       %d", input.Out))
-		lines = append(lines, fmt.Sprintf("    Signature: %s", input.Sig))
+		lines = append(lines, ("  {"))
+		var sliptSig []string
+		if input.Sig != "" {
+			if input.Sig[:2] == "47" {
+				sliptSig = strings.Split(input.Sig[2:], "0121")
+			} else if input.Sig[:4] == "0047" {
+				sliptSig = strings.Split(input.Sig[4:], "0147")
+			}
+		}
+		scriptasm := func(sliptSig []string) string {
+			if len(sliptSig) > 1 {
+				return sliptSig[0] + "[ALL]" + sliptSig[1]
+			}
+			return ""
+		}(sliptSig)
+		lines = append(lines, fmt.Sprintf("    \"scriptSig\":{\"asm\":\"%s\",\"hex\":\"%s\"},", scriptasm, input.Sig))
+		lines = append(lines, fmt.Sprintf("    \"txid\":      \"%x\",", input.ID))
+		lines = append(lines, fmt.Sprintf("    \"vout\":       %d", input.Out))
+		if (i + 1) == len(tx.Inputs) {
+			lines = append(lines, ("  }"))
+		} else {
+			lines = append(lines, ("  },"))
+		}
 	}
-
+	lines = append(lines, ("],"))
+	lines = append(lines, ("\"vout\": ["))
 	for i, output := range tx.Outputs {
-		lines = append(lines, fmt.Sprintf("  Output %d:", i))
-		lines = append(lines, fmt.Sprintf("    Value:  %d", output.Value))
-		lines = append(lines, fmt.Sprintf("    PubKeyHash: %s", output.PubKeyHash))
+		lines = append(lines, fmt.Sprintf("  { \"n\": %d,", i))
+		//address
+		address := GetAddressFromScriptHash(output)
+		var asm string
+		var scripttype string
+		if strings.HasPrefix(address, "1") {
+			asm = GetP2PKHScript(address)
+			scripttype = "pubkeyhash"
+		} else if strings.HasPrefix(address, "3") {
+			asm = GetP2SHScript(address)
+			scripttype = "scripthash"
+		} else if strings.HasPrefix(address, "bc1") {
+			asm = GetP2PWKHScript(address)
+			scripttype = "bech32"
+		}
+		lines = append(lines, fmt.Sprintf("    \"scriptPubKey\":{ \"addresses\":[\"%s\"],\"asm\":\"%s\",\"hex\":\"%s\",\"reqSigs\":%d,\"type\": \"%s\"},", address, asm, output.PubKeyHash, 1, scripttype))
+		valueInBtc := float64(output.Value) / float64(SatoshiPerBitcoin)
+		lines = append(lines, fmt.Sprintf("    \"value\":  %f", (valueInBtc)))
+		if (i + 1) == len(tx.Outputs) {
+			lines = append(lines, ("  }"))
+		} else {
+			lines = append(lines, ("  },"))
+		}
 	}
-	lines = append(lines, fmt.Sprintf("Locktime: %d", tx.Locktime))
+	lines = append(lines, ("],"))
+
 	return strings.Join(lines, "\n")
 }
 func ReverseBytes(data []byte) []byte {

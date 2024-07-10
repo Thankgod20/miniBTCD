@@ -13,12 +13,12 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/Thankgod20/miniBTCD/elliptical"
 	"github.com/Thankgod20/miniBTCD/trx"
-
-	"golang.org/x/crypto/ripemd160"
 )
 
 type Mempool struct {
@@ -93,8 +93,9 @@ func (m *Mempool) SubmitTransaction(trnx *trx.Transaction, untrnx *trx.Transacti
 	var utxosAmount int
 	var trxTotalAmount int
 	// Check if all inputs are in UTXO set and signatures are valid
-	for _, input := range tx.Inputs {
+	for i, input := range unTx.Inputs {
 		prevTxID := hex.EncodeToString(input.ID)
+		log.Println("frist PrevInput", prevTxID)
 		utxoKey := fmt.Sprintf("%s:%d", prevTxID, input.Out)
 		txo, exists := utxoSet.UTXOs[utxoKey]
 		if !exists {
@@ -135,11 +136,12 @@ func (m *Mempool) SubmitTransaction(trnx *trx.Transaction, untrnx *trx.Transacti
 
 		//Get raw Tran
 		// Verify signature
-		if !VerifySignature(pubKeyHash, signature, isP2SH, publKey, tx) { //input.Sig, pubKey) {
+		if !VerifySignature(pubKeyHash, signature, isP2SH, i, publKey, txo.PubKeyHash, tx) { //input.Sig, pubKey) {
 			log.Println("invalid signature")
 			return ("invalid signature")
 		}
 		utxosAmount += txo.Value
+		tx.ToHex(false)
 	}
 	for _, output := range tx.Outputs {
 		log.Println(" Output:-", output.Value)
@@ -149,13 +151,7 @@ func (m *Mempool) SubmitTransaction(trnx *trx.Transaction, untrnx *trx.Transacti
 	if utxosAmount > trxTotalAmount {
 		// Add the transaction to the mempool
 		m.AddTransaction(unTx)
-		//log.Printf("Transaction: %s Added To Mempool", txID)
-		//Add miner Transaction
-		//minerFee := utxosAmount - trxTotalAmount
-		//log.Println("Miner Fee Added")
-		//minerTx := trx.CreateCoinbase("Reward", m.Miner, minerFee)
-		//minerTxToString := minerTx.ToString()
-		//m.AddTransaction(minerTx)
+
 		log.Println("Successful\n")
 		return "Successful"
 	} else {
@@ -284,14 +280,20 @@ func doubleSha256(data []byte) []byte {
 }
 
 // VerifySignature verifies if the signature is valid for the given hash and public key
-func VerifySignature(pubKeyHash string, signature string, isP2SH bool, pubKeyx []byte, tx *trx.Transaction) bool {
+func VerifySignature(pubKeyHash string, signature string, isP2SH bool, index int, pubKeyx []byte, txoPubKeyHash string, tx *trx.Transaction) bool {
 	pubKey := pubKeyx
 	isCompressed := false
+	failedCompressed := false
 	if pubKey[0] != 0x04 || len(pubKey) != 65 {
 		log.Println("! PubKey Not Decompressed") //, pubKey)
-		decomPubKey, err := DecompressPubKey(pubKey)
+		decomPubKey, err := elliptical.DecompressPubKey(pubKey)
 		if err != nil {
+			failedCompressed = true
 			log.Println("Error Decompressing Pubkey", err)
+		}
+		if failedCompressed {
+			decomPubKey = pubKey
+			//decomPubKey, _, _ = DecompressPubKeyTx(hex.EncodeToString(pubKey))
 		}
 		log.Println("Decompressed PubKey:-", hex.EncodeToString(decomPubKey))
 		pubKey = decomPubKey
@@ -308,14 +310,14 @@ func VerifySignature(pubKeyHash string, signature string, isP2SH bool, pubKeyx [
 		pubKey = append(pubKey, []byte{0x52, 0xae}...)
 		log.Printf("P2SH Redemm Script:%x", pubKey)
 	}
-	wpubKey := hash160(pubKey)
+	wpubKey := elliptical.Hash160(pubKey)
 	if isCompressed {
 		if isP2SH {
 			pubKeyx = append([]byte{0x51, 0x21}, pubKeyx...)
 			pubKeyx = append(pubKeyx, []byte{0x52, 0xae}...)
 			log.Printf("P2SH Compressed Redemm Script:%x", pubKeyx)
 		}
-		wpubKey = hash160(pubKeyx)
+		wpubKey = elliptical.Hash160(pubKeyx)
 	}
 	log.Printf("Compare:%x and %x", hash, wpubKey)
 	if bytes.Equal(hash, wpubKey) {
@@ -323,6 +325,7 @@ func VerifySignature(pubKeyHash string, signature string, isP2SH bool, pubKeyx [
 		for i := range tx.Inputs {
 			tx.Inputs[i].Sig = ""
 		}
+		tx.Inputs[index].Sig = txoPubKeyHash
 		trxhex, err := tx.ToHex(false)
 		if err != nil {
 			return false
@@ -338,10 +341,8 @@ func VerifySignature(pubKeyHash string, signature string, isP2SH bool, pubKeyx [
 		r := big.NewInt(0)
 		s := big.NewInt(0)
 		// Define signature structure
-		type ECDSASignature struct {
-			R, S *big.Int
-		}
-		var sign ECDSASignature
+
+		var sign elliptical.Signature
 
 		//decode from DER
 		log.Println("Signature:", signature, signature[:len(signature)-2])
@@ -364,6 +365,12 @@ func VerifySignature(pubKeyHash string, signature string, isP2SH bool, pubKeyx [
 			pubKey = pubKey[2 : len(pubKey)-2]
 		}
 		x, y := elliptic.Unmarshal(elliptic.P256(), pubKey)
+		if x == nil {
+			_, x, y = elliptical.DecompressPubKeyTx(hex.EncodeToString(pubKey))
+			pubkey := elliptical.Point{X: x, Y: y}
+			istrue := elliptical.Verify(pubkey, sign, dataToSign)
+			return istrue
+		}
 		rawPubKey := ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}
 		//log.Printf("dataToSign %x %x", dataToSign, pubKey)
 		return ecdsa.Verify(&rawPubKey, dataToSign, r, s)
@@ -375,12 +382,19 @@ func VerifySignature(pubKeyHash string, signature string, isP2SH bool, pubKeyx [
 // VerifySignature verifies if the signature is valid for the given hash and public key
 func VerifyWitness(pubKeyHash string, signature string, index int, prvInputVal int, pubKeyx []byte, tx *trx.SegWit) bool {
 	pubKey := pubKeyx
+	log.Printf("PubKey of Owner: %x", pubKey)
 	isCompressed := false
+	failedCompressed := false
 	if pubKey[0] != 0x04 || len(pubKey) != 65 {
 		log.Println("PubKey Not Decompressed") //, pubKey)
-		decomPubKey, err := DecompressPubKey(pubKey)
+		decomPubKey, err := elliptical.DecompressPubKey(pubKey)
 		if err != nil {
+			failedCompressed = true
 			log.Println("Error Decompressing Pubkey", err)
+		}
+		if failedCompressed {
+			decomPubKey = pubKey
+			//decomPubKey, _, _ = DecompressPubKeyTx(hex.EncodeToString(pubKey))
 		}
 		log.Println("Decompressed PubKey:-", hex.EncodeToString(decomPubKey))
 		pubKey = decomPubKey
@@ -392,9 +406,9 @@ func VerifyWitness(pubKeyHash string, signature string, index int, prvInputVal i
 		log.Println("Unable to Decode PubKey to byte", err)
 	}
 	log.Println("Checking Hash160 of Addr....")
-	wpubKey := hash160(pubKey)
+	wpubKey := elliptical.Hash160(pubKey)
 	if isCompressed {
-		wpubKey = hash160(pubKeyx)
+		wpubKey = elliptical.Hash160(pubKeyx)
 	}
 	log.Println("Comparing PubKeys\nFrom trns.Out", pubKeyHash, "\nSpender PubKey", hex.EncodeToString(wpubKey))
 	if bytes.Equal(hash, wpubKey) {
@@ -402,20 +416,27 @@ func VerifyWitness(pubKeyHash string, signature string, index int, prvInputVal i
 			tx.Witness[i] = [][]byte{}
 		}
 		//get the hex of the transcations
-		PreImage, message := ConstructSegWitPreimage(tx, index, prvInputVal, hex.EncodeToString(wpubKey))
+		sigHash := signature[len(signature)-2:]
+		// Convert the string to an integer
+		value, err := strconv.ParseUint(sigHash, 16, 32)
+		if err != nil {
+			fmt.Println("Error converting string to uint32:", err)
+
+		}
+		// Convert the parsed value to uint32
+		sigHashType := uint32(value)
+		PreImage, message := ConstructSegWitPreimage(tx, index, prvInputVal, hex.EncodeToString(wpubKey), sigHashType)
 		log.Println("PreImage:-", hex.EncodeToString(PreImage), "\nMessage:-", hex.EncodeToString(message))
 		//toHex, _ := tx.ToHex(true)
-		//log.Println("Hexx", toHex)
+
 		r := big.NewInt(0)
 		s := big.NewInt(0)
 		// Define signature structure
-		type ECDSASignature struct {
-			R, S *big.Int
-		}
-		var sign ECDSASignature
+
+		var sign elliptical.Signature //ECDSASignature
 
 		//decode from DER
-		//log.Println("Signature:", signature, signature[:len(signature)-2])
+		log.Println("Signature:", signature, signature[:len(signature)-2])
 		sigBytes, err := hex.DecodeString(signature)
 		if err != nil {
 			return false
@@ -426,11 +447,19 @@ func VerifyWitness(pubKeyHash string, signature string, index int, prvInputVal i
 		}
 		r = sign.R
 		s = sign.S
+		log.Printf("Signatures:%x\n", sign)
 		log.Println("Signatures", r, s)
-		//r.SetBytes(sigBytes[:len(sigBytes)/2])
-		//s.SetBytes(sigBytes[len(sigBytes)/2:])
 
 		x, y := elliptic.Unmarshal(elliptic.P256(), pubKey)
+		if x == nil {
+
+			_, x, y = elliptical.DecompressPubKeyTx(hex.EncodeToString(pubKey))
+			pubkey := elliptical.Point{X: x, Y: y}
+			istrue := elliptical.Verify(pubkey, sign, message)
+			return istrue
+		}
+		log.Println("X:", x)
+		log.Println("Y:", y)
 		rawPubKey := ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}
 
 		return ecdsa.Verify(&rawPubKey, message, r, s)
@@ -438,7 +467,7 @@ func VerifyWitness(pubKeyHash string, signature string, index int, prvInputVal i
 		return false
 	}
 }
-func ConstructSegWitPreimage(tx *trx.SegWit, inputIndex int, inputAmount int, publicKeyHash string) ([]byte, []byte) {
+func ConstructSegWitPreimage(tx *trx.SegWit, inputIndex int, inputAmount int, publicKeyHash string, sighashType uint32) ([]byte, []byte) {
 	// Helper function to perform double SHA256 hashing
 	ddoubleSha256 := func(data []byte) []byte {
 		firstHash := sha256.Sum256(data)
@@ -450,182 +479,149 @@ func ConstructSegWitPreimage(tx *trx.SegWit, inputIndex int, inputAmount int, pu
 	version := make([]byte, 4)
 	binary.LittleEndian.PutUint32(version, uint32(tx.Version))
 
-	// 2. Serialize and hash the TXIDs and VOUTs for the inputs
-	var serializedInputs bytes.Buffer
-	for _, input := range tx.Inputs {
-		inID := trx.ReverseBytes(input.ID)
-		serializedInputs.Write(inID)
-		vout := make([]byte, 4)
-		binary.LittleEndian.PutUint32(vout, uint32(input.Out))
-		serializedInputs.Write(vout)
-		//log.Println("hashInputs", hex.EncodeToString(inID))
-		//log.Println("hashInputs Non", hex.EncodeToString((input.ID)))
+	// 2. hashPrevouts
+	var hashPrevouts []byte
+	if sighashType&0x80 == 0 {
+		var serializedInputs bytes.Buffer
+		for _, input := range tx.Inputs {
+			inID := trx.ReverseBytes(input.ID)
+			log.Printf("InputID %x", inID)
+			serializedInputs.Write(inID)
+			vout := make([]byte, 4)
+			binary.LittleEndian.PutUint32(vout, uint32(input.Out))
+			serializedInputs.Write(vout)
+		}
+		hashPrevouts = ddoubleSha256(serializedInputs.Bytes())
+	} else {
+		hashPrevouts = make([]byte, 32)
 	}
-	//log.Println("TRX", tx.ToString())
-	hashInputs := ddoubleSha256(serializedInputs.Bytes())
-	//log.Println("hashInputs x", hex.EncodeToString(hashInputs))
-	// 3. Serialize and hash the sequences for the inputs
-	var serializedSequences bytes.Buffer
-	for _, input := range tx.Inputs {
-		sequence := make([]byte, 4)
-		binary.LittleEndian.PutUint32(sequence, input.Sequence)
-		serializedSequences.Write(sequence)
+	log.Printf("hashPrevouts %x", hashPrevouts)
+	// 3. hashSequence
+	var hashSequence []byte
+	if sighashType&0x80 == 0 && sighashType&0x1f != 0x02 && sighashType&0x1f != 0x03 {
+		var serializedSequences bytes.Buffer
+		for _, input := range tx.Inputs {
+			sequence := make([]byte, 4)
+			binary.LittleEndian.PutUint32(sequence, input.Sequence)
+			serializedSequences.Write(sequence)
+		}
+		hashSequence = ddoubleSha256(serializedSequences.Bytes())
+	} else {
+		hashSequence = make([]byte, 32)
 	}
-	hashSequences := ddoubleSha256(serializedSequences.Bytes())
-	//log.Println("hashSequences x", hex.EncodeToString(hashSequences))
-	// 4. Serialize the TXID and VOUT for the input we're signing
+	log.Printf("hashSequence %x", hashSequence)
+	// 4. outpoint (for the input we're signing)
 	input := tx.Inputs[inputIndex]
-	var serializedInput bytes.Buffer
-	inID := (input.ID)
-	serializedInput.Write(inID)
+	var outpoint bytes.Buffer
+	inID := input.ID //trx.ReverseBytes(input.ID)
+	outpoint.Write(inID)
 	vout := make([]byte, 4)
 	binary.LittleEndian.PutUint32(vout, uint32(input.Out))
-	serializedInput.Write(vout)
-	log.Println("ReverseBytes x", hex.EncodeToString(inID))
-	// 5. Create a scriptcode for the input we're signing
-	//log.Println("The PublicHash", publicKeyHash)
+	outpoint.Write(vout)
+
+	// 5. scriptCode
 	scriptcode := "1976a914" + publicKeyHash + "88ac"
 	scriptcodeBytes, err := hex.DecodeString(scriptcode)
 	if err != nil {
-		log.Fatal("Eroro", err)
+		log.Fatal("Error decoding script code:", err)
 	}
 
-	// 6. Find the input amount
+	// 6. value (input amount)
 	amount := make([]byte, 8)
 	binary.LittleEndian.PutUint64(amount, uint64(inputAmount))
-	//log.Println("Amount", inputAmount, "In Hex", hex.EncodeToString(amount))
-	// 7. Grab the sequence for the input we're signing
+	log.Println("Input Amount:", inputAmount)
+	// 7. nSequence (for the input we're signing)
 	sequence := make([]byte, 4)
 	binary.LittleEndian.PutUint32(sequence, input.Sequence)
-
-	// 8. Serialize and hash all the outputs
-	var serializedOutputs bytes.Buffer
-	for _, output := range tx.Outputs {
+	log.Println("Input Sequence:", input.Sequence)
+	// 8. hashOutputs
+	var hashOutputs []byte
+	if sighashType&0x1f != 0x02 && sighashType&0x1f != 0x03 {
+		var serializedOutputs bytes.Buffer
+		for _, output := range tx.Outputs {
+			value := make([]byte, 8)
+			binary.LittleEndian.PutUint64(value, uint64(output.Value))
+			serializedOutputs.Write(value)
+			var scriptpubkeyHash []byte
+			if strings.Contains(output.PubKeyHash, "OP") {
+				pubKeyHash := strings.Split(output.PubKeyHash, "/")
+				pubKeyHashBytes, err := hex.DecodeString(pubKeyHash[1])
+				if err != nil {
+					log.Println("Error decoding PubKeyHash:", err)
+				}
+				pubKeyHashLen := byte(len(pubKeyHashBytes))
+				scriptpubkeyHash, err = trx.DecodeScriptPubKey(output.PubKeyHash, pubKeyHashLen)
+				if err != nil {
+					log.Println("Error decoding script pub key:", err)
+				}
+				log.Println("Script Type:", pubKeyHash[0], "Decoded ", hex.EncodeToString(scriptpubkeyHash))
+			} else {
+				scriptpubkey, err := hex.DecodeString(output.PubKeyHash)
+				if err != nil {
+					log.Println("Error decoding script pub key:", err)
+				}
+				scriptpubkeyHash = scriptpubkey
+			}
+			serializedOutputs.WriteByte(byte(len(scriptpubkeyHash)))
+			serializedOutputs.Write(scriptpubkeyHash)
+		}
+		hashOutputs = ddoubleSha256(serializedOutputs.Bytes())
+	} else if sighashType&0x1f == 0x02 && inputIndex < len(tx.Outputs) {
+		var serializedOutputs bytes.Buffer
+		output := tx.Outputs[inputIndex]
 		value := make([]byte, 8)
 		binary.LittleEndian.PutUint64(value, uint64(output.Value))
 		serializedOutputs.Write(value)
-		//scriptpubkey := output.PubKeyHash
-		//fmt.Println(output.PubKeyHash)
 		var scriptpubkeyHash []byte
 		if strings.Contains(output.PubKeyHash, "OP") {
-			//split Strings
 			pubKeyHash := strings.Split(output.PubKeyHash, "/")
-			// Convert PubKeyHash to bytes
-			pubKeyHashBytes, err := hex.DecodeString(pubKeyHash[1]) //(output.PubKeyHash)
+			pubKeyHashBytes, err := hex.DecodeString(pubKeyHash[1])
 			if err != nil {
-				fmt.Println("Error decoding PubKeyHash:", err)
-
+				log.Println("Error decoding PubKeyHash:", err)
 			}
-			// Calculate the length of PubKeyHash
 			pubKeyHashLen := byte(len(pubKeyHashBytes))
-
-			// Deocde ScriptPubKey ASM to byte
 			scriptpubkeyHash, err = trx.DecodeScriptPubKey(output.PubKeyHash, pubKeyHashLen)
 			if err != nil {
-				log.Println("DDDDD", err)
+				log.Println("Error decoding script pub key:", err)
 			}
 			log.Println("Script Type:", pubKeyHash[0], "Decoded ", hex.EncodeToString(scriptpubkeyHash))
 		} else {
 			scriptpubkey, err := hex.DecodeString(output.PubKeyHash)
 			if err != nil {
-				log.Println("DDDDD", err)
+				log.Println("Error decoding script pub key:", err)
 			}
 			scriptpubkeyHash = scriptpubkey
 		}
-		//log.Println("scriptpubkeyHash", hex.EncodeToString(scriptpubkeyHash))
 		serializedOutputs.WriteByte(byte(len(scriptpubkeyHash)))
 		serializedOutputs.Write(scriptpubkeyHash)
+		hashOutputs = ddoubleSha256(serializedOutputs.Bytes())
+	} else {
+		hashOutputs = make([]byte, 32)
 	}
-	hashOutputs := ddoubleSha256(serializedOutputs.Bytes())
-
-	// 9. Grab the locktime
+	log.Printf("hashOutputs %x", hashOutputs)
+	// 9. nLocktime
 	locktime := make([]byte, 4)
 	binary.LittleEndian.PutUint32(locktime, tx.Locktime)
 
-	// 10. Combine to create a hash preimage
+	// 10. sighash type
+	sighashTypeBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(sighashTypeBytes, sighashType)
+
+	// Combine to create the preimage
 	var preimage bytes.Buffer
-	preimage.Write(version)
-	preimage.Write(hashInputs)
-	preimage.Write(hashSequences)
-	preimage.Write(serializedInput.Bytes())
-	preimage.Write(scriptcodeBytes)
-	preimage.Write(amount)
-	preimage.Write(sequence)
-	preimage.Write(hashOutputs)
-	preimage.Write(locktime)
+	preimage.Write(version)          // 1
+	preimage.Write(hashPrevouts)     // 2
+	preimage.Write(hashSequence)     // 3
+	preimage.Write(outpoint.Bytes()) // 4
+	preimage.Write(scriptcodeBytes)  // 5
+	preimage.Write(amount)           // 6
+	preimage.Write(sequence)         // 7
+	preimage.Write(hashOutputs)      // 8
+	preimage.Write(locktime)         // 9
+	preimage.Write(sighashTypeBytes) // 10
 
-	// 11. Add signature hash type to the end of the hash preimage
-	sighashType := make([]byte, 4)
-	binary.LittleEndian.PutUint32(sighashType, 0x01)
-	preimage.Write(sighashType)
-
-	// 12. Hash the preimage
+	// Double SHA256 the preimage
 	message := ddoubleSha256(preimage.Bytes())
 
 	return preimage.Bytes(), message
 }
-
-// DecompressPubKey decompresses a compressed public key
-func DecompressPubKey(pubKey []byte) ([]byte, error) {
-	log.Println("Decompressing Pubkey...")
-	if len(pubKey) != 33 || (pubKey[0] != 0x02 && pubKey[0] != 0x03) {
-		return nil, errors.New("invalid compressed public key format")
-	}
-	//fmt.Println("pubKey[1:]", pubKey[1:])
-	curve := elliptic.P256()
-	x := new(big.Int).SetBytes(pubKey[1:])
-	y := decompressYCoordinate(curve, pubKey[0] == 0x03, x)
-	//fmt.Println("X,Y", x, y)
-	if y == nil {
-		return nil, errors.New("failed to decompress public key")
-	}
-
-	decompressedPubKey := elliptic.Marshal(curve, x, y)
-	return decompressedPubKey, nil
-}
-
-// decompressYCoordinate computes the y-coordinate from the x-coordinate for a given curve
-func decompressYCoordinate(curve elliptic.Curve, isOdd bool, x *big.Int) *big.Int {
-	// P-256 parameters
-	p := curve.Params().P
-	a := big.NewInt(-3)
-	b := new(big.Int)
-	b.SetString("5AC635D8AA3A93E7B3EBBD55769886BC651D06B0CC53B0F63BCE3C3E27D2604B", 16)
-
-	// Calculate x^3 + ax + b (mod p)
-	xCubed := new(big.Int).Exp(x, big.NewInt(3), p)
-	ax := new(big.Int).Mul(a, x)
-	ax.Mod(ax, p)
-	result := new(big.Int).Add(xCubed, ax)
-	result.Add(result, b)
-	result.Mod(result, p)
-
-	// Calculate the modular square root (y-coordinate)
-	y := new(big.Int).ModSqrt(result, p)
-	if y == nil {
-		return nil //, fmt.Errorf("no valid y-coordinate for x = %s", x.Text(16))
-	}
-	if y.Bit(0) != 0 {
-		if !isOdd {
-			y = new(big.Int).Sub(curve.Params().P, y)
-		}
-	} else {
-		if isOdd {
-			y = new(big.Int).Sub(curve.Params().P, y)
-		}
-	}
-	return y //, nil
-}
-func hash160(data []byte) []byte {
-	sha := sha256.Sum256(data)
-	ripemd := ripemd160.New()
-	ripemd.Write(sha[:])
-	return ripemd.Sum(nil)
-}
-
-//0200000014dd1ee33405701cf208a34128a8ce42027d2a967562283153c6b0ca98788ecc82a7d5bb59fc957ff7f737ca0b8be713c705d6173783ad5edb067819bed70be8de2350dfe7c8264e83000b1de255a03f6ddff550f72ac90aa3118015a78e2453
-
-//000000001976a914628ba348bd752bfe879f1b31c203d6e551f3855e88ac
-
-//0008af2f00000000ffffffffac5a3fb4dc4f2509e5ed01c5058a66004dde67a12566858c24cec095d9dd51ce0000000001000000  or
-//0200000014dd1ee33405701cf208a34128a8ce42027d2a967562283153c6b0ca98788ecc82a7d5bb59fc957ff7f737ca0b8be713c705d6173783ad5edb067819bed70be8de2350dfe7c8264e83000b1de255a03f6ddff550f72ac90aa3118015a78e2453000000001976a914628ba348bd752bfe879f1b31c203d6e551f3855e88ac009ce4a600000000ffffffffac5a3fb4dc4f2509e5ed01c5058a66004dde67a12566858c24cec095d9dd51ce0000000001000000

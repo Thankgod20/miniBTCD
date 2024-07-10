@@ -230,3 +230,24 @@ func (u *UTXOSet) GetUTXOs(pubKeyHash string) []map[string]*trx.TXOutput {
 	}
 	return allutxos
 }
+func (u *UTXOSet) GetUTXOsOfScriptHash(pubKeyHash string) ([]map[string]*trx.TXOutput, []string) {
+	u.mutex.Lock()
+	defer u.mutex.Unlock()
+	collected := make(map[string]*trx.TXOutput)
+	var allutxos []map[string]*trx.TXOutput
+	var theIDs []string
+	for id, out := range u.UTXOs {
+		scriptbyte, err := hex.DecodeString(out.PubKeyHash)
+		if err != nil {
+			log.Println("Error ", err)
+		}
+		scripthash := SingleSha256(scriptbyte)
+		if hex.EncodeToString(scripthash) == pubKeyHash {
+			collected[id] = out
+			//total += out.Value
+			allutxos = append(allutxos, collected)
+			theIDs = append(theIDs, id)
+		}
+	}
+	return allutxos, theIDs
+}

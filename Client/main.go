@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Thankgod20/miniBTCD/blockchain"
+	"github.com/Thankgod20/miniBTCD/elliptical"
 	"github.com/Thankgod20/miniBTCD/mempool"
 	"github.com/Thankgod20/miniBTCD/trx"
 	"github.com/Thankgod20/miniBTCD/wallet"
@@ -43,12 +44,16 @@ func main() {
 	getTrx := flag.String("getTrx", "", "Get  txID")
 	getblock := flag.String("getblock", "", "Get  txID")
 	getaddrhistry := flag.String("trnxs", "", "Get  txID")
+	computTxID := flag.String("computTxID", "", "Get  txID")
 	//getlatestBlock(client)
 	flag.Parse()
 	switch {
 	case *getlatestblock:
 		log.Println("Get Latest Block")
 		getlatestBlock(client)
+	case *computTxID != "":
+		log.Println("Get Latest Block")
+		computTxIDs(client, *computTxID)
 	case *getaddrhistry != "":
 		log.Println("Get Address History")
 		getTrnxHistory(client, *getaddrhistry)
@@ -131,6 +136,20 @@ func main() {
 		log.Println("Usage <client.go> --<options>. Please use --latestblock.")
 	}
 
+}
+func computTxIDs(client *rpc.Client, trxx string) {
+	txBytes, err := hex.DecodeString(trxx)
+	if err != nil {
+		log.Println("Error Seting ID", err)
+	}
+	isSegWit := isSegWitTransaction(txBytes)
+	if isSegWit {
+		txID := trx.SegTxID(txBytes)
+		log.Printf("Transaction ID : %x", txID)
+	} else {
+		txID := elliptical.ComputeTransactionID(txBytes)
+		log.Printf("Transaction ID : %x", txID)
+	}
 }
 func getScriptHast(address string) {
 	if strings.HasPrefix(address, "1") {
@@ -226,7 +245,7 @@ func getFulTrXs(client *rpc.Client, txID string) {
 	args := blockchain.GetVerifyTransactionArgs{TransactionID: txID}
 	var reply blockchain.GetLatestBlockReply
 
-	err := client.Call("Blockchain.GetFulTX", &args, &reply)
+	err := client.Call("Blockchain.GetFulTXElect", &args, &reply)
 	if err != nil {
 		log.Fatalf("Failed to get latest block: %v", err)
 	}
@@ -339,6 +358,7 @@ func decodeTx(txhex string) {
 			log.Println("Error Decoding HexTX:", err)
 		}
 		readTx := txn.ToString()
+		log.Printf("Transaction ID:%x\n", txn.ID)
 		log.Println("Transaction:\n", readTx)
 	} else {
 		log.Println("Transaction Type: Non-SegWit transaction detected.")
@@ -348,6 +368,7 @@ func decodeTx(txhex string) {
 			log.Println("Error Decoding HexTX:", err)
 		}
 		readTx := txn.ToString()
+		log.Printf("Transaction ID:%x\n", txn.ID)
 		log.Println("Transaction:\n", readTx)
 	}
 
@@ -379,31 +400,7 @@ func isSegWitTransaction(rawTx []byte) bool {
 	return false
 }
 func broadcasttx(client *rpc.Client, txhex string) {
-	/*rawTx, err := hex.DecodeString(txhex)
-	if err != nil {
-		log.Fatalf("Failed to decode raw transaction: %v", err)
-	}
 
-	// Check if the transaction is SegWit
-	isSegWit := isSegWitTransaction(rawTx)
-
-	if isSegWit {
-		log.Println("SegWit transaction detected.")
-		// Process using SegWit decoder
-		txn, err := trx.FromSegWitHex(txhex)
-		if err != nil {
-			log.Println("Error Decoding HexTX:", err)
-		}
-		readTx := txn.ToString()
-		log.Println("Transaction:\n", readTx)
-	} else {
-		log.Println("Non-SegWit transaction detected.")
-		// Process using non-SegWit decoder
-		txn, err := trx.FromHex(txhex)
-		if err != nil {
-			log.Println("Error Decoding HexTX:", err)
-		}
-	*/
 	//Create utxos Initializer
 	args := blockchain.GetTransactionsArgs{TransactionHex: txhex}
 	var reply blockchain.GetLatestBlockReply

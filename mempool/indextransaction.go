@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Thankgod20/miniBTCD/elliptical"
 	"github.com/Thankgod20/miniBTCD/trx"
 	"github.com/Thankgod20/miniBTCD/wallet"
 )
@@ -261,7 +262,7 @@ func GetP2SHScript(address string) []byte {
 	}
 	return pubkey
 }
-func getAddressFromScriptHash(out trx.TXOutput) string {
+func GetAddressFromScriptHash(out trx.TXOutput) string {
 	//Process ScriptPubKeyHash
 	pubKeyHash, Addrtype, err := ExtractPubKeyHash(out.PubKeyHash)
 	if err != nil {
@@ -297,7 +298,7 @@ func getSegAddress(witness [][]byte) string {
 
 	//signatureA = append(signatureA, hex.EncodeToString(witness[0]))
 	publKeyA := witness[1]
-	pubKeyHash := hash160(publKeyA)
+	pubKeyHash := elliptical.Hash160(publKeyA)
 	bech32Address, err := wallet.EncodeBech32(pubKeyHash)
 	if err != nil {
 		return ""
@@ -315,7 +316,7 @@ func getAddressFromSig(input trx.TXInput) string {
 		if err != nil {
 			log.Println("Unable to Decode PubKey", err)
 		}
-		pubKeyHash := hash160(publkey_)
+		pubKeyHash := elliptical.Hash160(publkey_)
 		versionedPayload := append([]byte{0x00}, pubKeyHash...)
 
 		//checksum of address
@@ -333,7 +334,7 @@ func getAddressFromSig(input trx.TXInput) string {
 			log.Println("Unable to Decode PubKey", err)
 		}
 		fmt.Println("Publick from SigScript:", sliptSig[1])
-		pubKeyHash := hash160(publkey_)
+		pubKeyHash := elliptical.Hash160(publkey_)
 		//pubKeyHash := hash160(redeemScripthex)
 		versionedPayload := append([]byte{0x05}, pubKeyHash...)
 

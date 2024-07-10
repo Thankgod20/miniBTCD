@@ -38,7 +38,7 @@ func (tx *SegWit) SetID() {
 	if err != nil {
 		log.Println("Error Seting ID", err)
 	}
-	txID := computeTransactionID(txBytes)
+	txID := SegTxID(txBytes) //computeTransactionID(txBytes)
 	tx.ID = txID
 }
 
@@ -532,7 +532,7 @@ func FromSegWitHex(txHex string) (*SegWit, error) {
 		return nil, fmt.Errorf("locktime error:%v", err)
 	}
 	// Compute the transaction ID (double SHA-256 hash of the serialized transaction)
-	txID := computeTransactionID(txBytes)
+	txID := SegTxID(txBytes) //computeTransactionID(txBytes)
 	return &SegWit{
 		Version:  int32(version),
 		Marker:   marker,
@@ -549,38 +549,66 @@ func FromSegWitHex(txHex string) (*SegWit, error) {
 func (tx *SegWit) ToString() string {
 	var lines []string
 	//log.Println("len(tx.Witness)", len(tx.Witness))
-	lines = append(lines, fmt.Sprintf("Transaction ID: %x", tx.ID))
-	lines = append(lines, fmt.Sprintf("Version: %d", tx.Version))
-	lines = append(lines, fmt.Sprintf("Marker: %d", tx.Marker))
-	lines = append(lines, fmt.Sprintf("Flag: %d", tx.Flag))
+	//lines = append(lines, fmt.Sprintf("Transaction ID: %x", tx.ID))
+	lines = append(lines, fmt.Sprintf("\"version\": %d,", tx.Version))
+	lines = append(lines, fmt.Sprintf("\"marker\": %d,", tx.Marker))
+	lines = append(lines, fmt.Sprintf("\"flag\": %d,", tx.Flag))
+	lines = append(lines, fmt.Sprintf("\"locktime\": %d,", tx.Locktime))
+	lines = append(lines, ("\"vin\": ["))
 	for i, input := range tx.Inputs {
-		lines = append(lines, fmt.Sprintf("  Input %d:", i))
-		lines = append(lines, fmt.Sprintf("    TXID:      %x", input.ID))
-		lines = append(lines, fmt.Sprintf("    Out:       %d", input.Out))
-		lines = append(lines, fmt.Sprintf("    Signature: %s", input.Sig))
-		lines = append(lines, fmt.Sprintf("    Sequence: %d", input.Sequence))
+		lines = append(lines, ("  {"))
+		lines = append(lines, fmt.Sprintf("    \"scriptSig\": \"%s\",", input.Sig))
+
+		lines = append(lines, fmt.Sprintf("    \"txid\":      \"%x\",", input.ID))
+		lines = append(lines, fmt.Sprintf("    \"vout\":       %d,", input.Out))
+		lines = append(lines, fmt.Sprintf("    \"sequence\": %d,", input.Sequence))
 		if len(tx.Witness[i]) > 0 {
-			lines = append(lines, fmt.Sprintf("    Witness: [\"%x\",\"%x\"]", tx.Witness[i][0], tx.Witness[i][1]))
+			lines = append(lines, fmt.Sprintf("    \"witness\": [\"%x\",\"%x\"]", tx.Witness[i][0], tx.Witness[i][1]))
 		} else {
 			lines = append(lines, fmt.Sprintf("    Witness: []"))
 		}
-
+		if (i + 1) == len(tx.Inputs) {
+			lines = append(lines, ("  }"))
+		} else {
+			lines = append(lines, ("  },"))
+		}
 	}
-
+	lines = append(lines, ("],"))
+	lines = append(lines, ("\"vout\": ["))
 	for i, output := range tx.Outputs {
-		lines = append(lines, fmt.Sprintf("  Output %d:", i))
-		lines = append(lines, fmt.Sprintf("    Value:  %d", output.Value))
-		lines = append(lines, fmt.Sprintf("    PubKeyHash: %s", output.PubKeyHash))
-	} /*
-		for j, witnessInput := range tx.Witness {
-			lines = append(lines, fmt.Sprintf("  InputWitness %d:", j))
-			for i, witness := range witnessInput {
-				lines = append(lines, fmt.Sprintf("   Witness %d:", i))
-				lines = append(lines, fmt.Sprintf("     %x", witness))
+		lines = append(lines, fmt.Sprintf("  { \"n\": %d,", i))
+		//address
+		address := GetAddressFromScriptHash(output)
+		var asm string
+		var scripttype string
+		if strings.HasPrefix(address, "1") {
+			asm = GetP2PKHScript(address)
+			scripttype = "pubkeyhash"
+		} else if strings.HasPrefix(address, "3") {
+			asm = GetP2SHScript(address)
+			scripttype = "scripthash"
+		} else if strings.HasPrefix(address, "bc1") {
+			asm = GetP2PWKHScript(address)
+			scripttype = "witnesspubkeyhash"
+		}
+		lines = append(lines, fmt.Sprintf("    \"scriptPubKey\":{ \"addresses\":[\"%s\"],\"asm\":\"%s\",\"hex\":\"%s\",\"reqSigs\":%d,\"type\": \"%s\"},", address, asm, output.PubKeyHash, 1, scripttype))
+		valueInBtc := float64(output.Value) / float64(SatoshiPerBitcoin)
+		lines = append(lines, fmt.Sprintf("    \"value\":  %f", valueInBtc))
+		if (i + 1) == len(tx.Outputs) {
+			lines = append(lines, ("  }"))
+		} else {
+			lines = append(lines, ("  },"))
+		}
+	}
+	lines = append(lines, ("],"))
 
-			}
-		}*/
-	lines = append(lines, fmt.Sprintf("Locktime: %d", tx.Locktime))
+	/*
+		for i, output := range tx.Outputs {
+			lines = append(lines, fmt.Sprintf("  Output %d:", i))
+			lines = append(lines, fmt.Sprintf("    Value:  %d", output.Value))
+			lines = append(lines, fmt.Sprintf("    PubKeyHash: %s", output.PubKeyHash))
+		}
+		lines = append(lines, fmt.Sprintf("Locktime: %d", tx.Locktime))*/
 	return strings.Join(lines, "\n")
 }
 

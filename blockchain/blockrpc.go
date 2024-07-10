@@ -76,6 +76,63 @@ func (bc *Blockchain) GetCurrentHeight(args *GetLatestBlockArgs, reply *GetLates
 	reply.JSONBlock = jsonBlock
 	return nil
 }
+func (bc *Blockchain) GetUTXOSScripttHash(args *GetBalanceArgs, reply *GetAddressHistoryReply) error {
+
+	//var scriptpubKey string = args.Address
+	scriptHash, _ := hex.DecodeString(args.Address)
+	scriptpubKey := trx.ReverseBytes(scriptHash)
+	log.Printf("Get UTXO By Hash Reversed: %x", scriptpubKey)
+
+	collected, ids := bc.UTXOSet.GetUTXOsOfScriptHash(hex.EncodeToString(scriptpubKey))
+	var allutxos []string
+	for i, id := range ids {
+		sliptId := strings.Split(id, ":")
+		tx_hash := sliptId[0]
+		tx_pos := sliptId[1]
+		value := collected[i][id].Value
+		height := getBlockDetailOfTx(tx_hash, *bc, "Height")
+		utxos := fmt.Sprintf("{ \"tx_pos\":%s , \"value\": %d, \"tx_hash\": \"%s\",\"height\": %d }", tx_pos, value, tx_hash, height)
+		allutxos = append(allutxos, utxos)
+	}
+	reply.TransactionHex = allutxos
+	return nil
+}
+
+func getBlockDetailOfTx(txID string, bc Blockchain, getType string) any {
+	for _, block := range bc.Blocks {
+
+		for _, txDetail := range block.Transactions {
+			if IsSegWitTransaction(txDetail) {
+				txS := hex.EncodeToString(txDetail)
+				segTx, err := trx.FromSegWitHex(txS)
+				if err != nil {
+					log.Println("Decode Genesis Hex Error:", err)
+				}
+				if hex.EncodeToString(segTx.ID) == txID {
+					switch getType {
+					case "Height":
+						return block.Height
+
+					}
+				}
+			} else {
+				txS := hex.EncodeToString(txDetail)
+				trnx, err := trx.FromHex(txS)
+				if err != nil {
+					log.Println("Decode Genesis Hex Error:", err)
+				}
+				if hex.EncodeToString(trnx.ID) == txID {
+					switch getType {
+					case "Height":
+						return block.Height
+
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
 func (bc *Blockchain) GetBalanceWitScripttHash(args *GetBalanceArgs, reply *GetLatestBlockReply) error {
 	var scriptpubKey string = args.Address
 	var publickeyhash string = ""
@@ -90,10 +147,13 @@ func (bc *Blockchain) GetBalanceWitScripttHash(args *GetBalanceArgs, reply *GetL
 	return nil
 }
 func (bc *Blockchain) GetBalanceByHash(args *GetBalanceArgs, reply *GetLatestBlockReply) error {
-	var scriptpubKey string = args.Address
+	//var scriptpubKey string = args.Address
 	var publickeyhash string = ""
 	var coinbase string = ""
-	_, total := bc.UTXOSet.UTXOAddressBalance(scriptpubKey, coinbase+publickeyhash)
+	scriptHash, _ := hex.DecodeString(args.Address)
+	scriptpubKey := trx.ReverseBytes(scriptHash)
+	log.Printf("Get Balance By Hash Reversed: %x", scriptpubKey)
+	_, total := bc.UTXOSet.UTXOAddressBalance(hex.EncodeToString(scriptpubKey), coinbase+publickeyhash)
 
 	jsonBlock, err := json.Marshal(total)
 	if err != nil {
@@ -313,6 +373,76 @@ func (bc *Blockchain) VerifyTX(args *GetTransactionReply, reply *GetLatestBlockR
 	}
 	return nil
 }
+func (bc *Blockchain) GetFulTXElect(args *GetTransactionReply, reply *GetLatestBlockReply) error {
+	//var isExist bool
+
+	for _, block := range bc.Blocks {
+
+		for _, txDetail := range block.Transactions {
+			if IsSegWitTransaction(txDetail) {
+				txS := hex.EncodeToString(txDetail)
+				segTx, err := trx.FromSegWitHex(txS)
+				if err != nil {
+					log.Println("Decode Genesis Hex Error:", err)
+				}
+				if hex.EncodeToString(segTx.ID) == args.TransactionID {
+					var lines []string
+					lines = append(lines, "{")
+					lines = append(lines, fmt.Sprintf("	\"blockhash\": \"%x\",", block.Hash))
+					lines = append(lines, fmt.Sprintf("	\"blocktime\": %d,", block.Timestamp))
+					lines = append(lines, fmt.Sprintf("	\"confirmations\": %d,", ((bc.Blocks[len(bc.Blocks)-1].Height-block.Height)+1)))
+					lines = append(lines, fmt.Sprintf(" \"hash\": \"%x\",", segTx.ID))
+					lines = append(lines, fmt.Sprintf(" \"hex\": \"%x\",", block.SerializeHeader()))
+					//lines = append(lines, fmt.Sprintf("	\"locktime\": %d,", 0))
+					lines = append(lines, fmt.Sprintf(" \"size\": %x,", byte(len(block.SerializeHeader()))))
+					lines = append(lines, fmt.Sprintf("	\"time\": %d,", block.Timestamp))
+					lines = append(lines, fmt.Sprintf(" \"txid\": \"%x\",", segTx.ID))
+					lines = append(lines, fmt.Sprintf(" \"height\": %d,", block.Height))
+					lines = append(lines, segTx.ToString())
+					trxhex, _ := segTx.ToHex(false)
+					lines = append(lines, fmt.Sprintf(" \"transactionHex\": \"%s\"", trxhex))
+					lines = append(lines, "}")
+					reply.JSONString = strings.Join(lines, "\n")
+					segTx.ToHex(true) //("True")
+					log.Println("Transaction exists in the blockchain.")
+					break
+				}
+			} else {
+				txS := hex.EncodeToString(txDetail)
+				trnx, err := trx.FromHex(txS)
+				if err != nil {
+					log.Println("Decode Genesis Hex Error:", err)
+				}
+				if hex.EncodeToString(trnx.ID) == args.TransactionID {
+					var lines []string
+					lines = append(lines, "{")
+					lines = append(lines, fmt.Sprintf("	\"blockhash\": \"%x\",", block.Hash))
+					lines = append(lines, fmt.Sprintf("	\"blocktime\": %d,", block.Timestamp))
+					lines = append(lines, fmt.Sprintf("	\"confirmations\": %d,", ((bc.Blocks[len(bc.Blocks)-1].Height-block.Height)+1)))
+					lines = append(lines, fmt.Sprintf(" \"hash\": \"%x\",", trnx.ID))
+					lines = append(lines, fmt.Sprintf(" \"hex\": \"%x\",", block.SerializeHeader()))
+					//lines = append(lines, fmt.Sprintf("	\"locktime\": %d,", 0))
+					lines = append(lines, fmt.Sprintf(" \"size\": %x,", byte(len(block.SerializeHeader()))))
+					lines = append(lines, fmt.Sprintf("	\"time\": %d,", block.Timestamp))
+					lines = append(lines, fmt.Sprintf(" \"txid\": \"%x\",", trnx.ID))
+					lines = append(lines, fmt.Sprintf(" \"height\": %d,", block.Height))
+					lines = append(lines, trnx.ToString())
+					trxhex, _ := trnx.ToHex(false)
+					lines = append(lines, fmt.Sprintf(" \"transactionHex\": \"%s\"", trxhex))
+					lines = append(lines, "}")
+					reply.JSONString = strings.Join(lines, "\n")
+					trnx.ToHex(true)
+					//reply.JSONString = trnx.ToString() //("True")
+					log.Println("Transaction exists in the blockchain.")
+					break
+				}
+
+			}
+		}
+
+	}
+	return nil
+}
 func (bc *Blockchain) GetFulTX(args *GetTransactionReply, reply *GetLatestBlockReply) error {
 	//var isExist bool
 
@@ -335,7 +465,10 @@ func (bc *Blockchain) GetFulTX(args *GetTransactionReply, reply *GetLatestBlockR
 					lines = append(lines, fmt.Sprintf("Hash: %x", segTx.ID))
 					lines = append(lines, fmt.Sprintf("Time: %d", block.Timestamp))
 					lines = append(lines, segTx.ToString())
-					reply.JSONString = strings.Join(lines, "\n") //("True")
+					trxhex, _ := segTx.ToHex(false)
+					lines = append(lines, fmt.Sprintf("TransactionHex: %s", trxhex))
+					reply.JSONString = strings.Join(lines, "\n")
+					segTx.ToHex(true) //("True")
 					log.Println("Transaction exists in the blockchain.")
 					break
 				}
@@ -355,7 +488,10 @@ func (bc *Blockchain) GetFulTX(args *GetTransactionReply, reply *GetLatestBlockR
 					lines = append(lines, fmt.Sprintf("Hash: %x", trnx.ID))
 					lines = append(lines, fmt.Sprintf("Time: %d", block.Timestamp))
 					lines = append(lines, trnx.ToString())
+					trxhex, _ := trnx.ToHex(false)
+					lines = append(lines, fmt.Sprintf("TransactionHex: %s", trxhex))
 					reply.JSONString = strings.Join(lines, "\n")
+					trnx.ToHex(true)
 					//reply.JSONString = trnx.ToString() //("True")
 					log.Println("Transaction exists in the blockchain.")
 					break
@@ -429,7 +565,7 @@ func (bc *Blockchain) GetTransactionHistoryScriptHash(args *GetAddressHistoryArg
 
 	scriptHash, _ := hex.DecodeString(args.Address)
 	reversed := trx.ReverseBytes(scriptHash)
-	log.Printf("Getting Transaction History for reversed %x of %s ", reversed, args.Address)
+	//log.Printf("Getting Transaction History for reversed %x of %s ", reversed, args.Address)
 	if txIDs, exists := bc.IndexTrx.ScriptHashTransactionIndex[hex.EncodeToString(reversed)]; exists {
 		//return txIDs
 		log.Println("Transaction Found for:", args.Address)
