@@ -683,9 +683,9 @@ func (tx *Transaction) ToString() string {
 		lines = append(lines, ("  {"))
 		var sliptSig []string
 		if input.Sig != "" {
-			if input.Sig[:2] == "47" {
+			if input.Sig[:2] == "47" || input.Sig[:2] == "48" {
 				sliptSig = strings.Split(input.Sig[2:], "0121")
-			} else if input.Sig[:4] == "0047" {
+			} else if input.Sig[:4] == "0047" || input.Sig[:4] == "0048" {
 				sliptSig = strings.Split(input.Sig[4:], "0147")
 			}
 		}

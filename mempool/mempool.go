@@ -74,6 +74,15 @@ func (m *Mempool) GetTransactions() [][]byte { //[]*trx.Transaction {
 	}
 	return transactions
 }
+func (m *Mempool) GetTransaction(trxID string) ([]byte, bool) { //[]*trx.Transaction {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	trx, exist := m.transactions[trxID]
+	if !exist {
+		return nil, false
+	}
+	return *trx, true
+}
 
 // SubmitTransaction validates and adds a transaction to the mempool
 func (m *Mempool) SubmitTransaction(trnx *trx.Transaction, untrnx *trx.Transaction, utxoSet *UTXOSet) string {
@@ -105,7 +114,7 @@ func (m *Mempool) SubmitTransaction(trnx *trx.Transaction, untrnx *trx.Transacti
 		var publKey []byte
 		var isP2SH bool = false
 		//signature
-		if input.Sig[:2] == "47" {
+		if input.Sig[:2] == "47" || input.Sig[:2] == "48" {
 			sliptSig := strings.Split(input.Sig[2:], "0121")
 			signature = sliptSig[0]
 			publkey_, err := hex.DecodeString(sliptSig[1])
@@ -115,7 +124,7 @@ func (m *Mempool) SubmitTransaction(trnx *trx.Transaction, untrnx *trx.Transacti
 			//fmt.Println("Publick from SigScript:", sliptSig[1])
 			publKey = publkey_
 			isP2SH = false
-		} else if input.Sig[:4] == "0047" {
+		} else if input.Sig[:4] == "0047" || input.Sig[:4] == "0048" {
 			sliptSig := strings.Split(input.Sig[4:], "01475121")
 			signature = sliptSig[0]
 			publkey_, err := hex.DecodeString(sliptSig[1][:len(sliptSig[1])-4])
@@ -282,6 +291,7 @@ func doubleSha256(data []byte) []byte {
 // VerifySignature verifies if the signature is valid for the given hash and public key
 func VerifySignature(pubKeyHash string, signature string, isP2SH bool, index int, pubKeyx []byte, txoPubKeyHash string, tx *trx.Transaction) bool {
 	pubKey := pubKeyx
+
 	isCompressed := false
 	failedCompressed := false
 	if pubKey[0] != 0x04 || len(pubKey) != 65 {
@@ -372,8 +382,17 @@ func VerifySignature(pubKeyHash string, signature string, isP2SH bool, index int
 			return istrue
 		}
 		rawPubKey := ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}
-		//log.Printf("dataToSign %x %x", dataToSign, pubKey)
-		return ecdsa.Verify(&rawPubKey, dataToSign, r, s)
+		ecdsayes := ecdsa.Verify(&rawPubKey, dataToSign, r, s)
+
+		if ecdsayes {
+			return ecdsayes
+		} else {
+			_, x, y = elliptical.DecompressPubKeyTx(hex.EncodeToString(pubKeyx))
+			pubkey := elliptical.Point{X: x, Y: y}
+			istrue := elliptical.Verify(pubkey, sign, dataToSign)
+			return istrue
+		}
+		//return ecdsa.Verify(&rawPubKey, dataToSign, r, s)
 	} else {
 		return false
 	}
@@ -461,8 +480,16 @@ func VerifyWitness(pubKeyHash string, signature string, index int, prvInputVal i
 		log.Println("X:", x)
 		log.Println("Y:", y)
 		rawPubKey := ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}
-
-		return ecdsa.Verify(&rawPubKey, message, r, s)
+		ecdsayes := ecdsa.Verify(&rawPubKey, message, r, s)
+		if ecdsayes {
+			return ecdsayes
+		} else {
+			_, x, y = elliptical.DecompressPubKeyTx(hex.EncodeToString(pubKeyx))
+			pubkey := elliptical.Point{X: x, Y: y}
+			istrue := elliptical.Verify(pubkey, sign, message)
+			return istrue
+		}
+		//return ecdsa.Verify(&rawPubKey, message, r, s)
 	} else {
 		return false
 	}

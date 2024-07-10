@@ -375,8 +375,8 @@ func (bc *Blockchain) VerifyTX(args *GetTransactionReply, reply *GetLatestBlockR
 }
 func (bc *Blockchain) GetFulTXElect(args *GetTransactionReply, reply *GetLatestBlockReply) error {
 	//var isExist bool
-
-	for _, block := range bc.Blocks {
+	notMined := false
+	for k, block := range bc.Blocks {
 
 		for _, txDetail := range block.Transactions {
 			if IsSegWitTransaction(txDetail) {
@@ -404,7 +404,8 @@ func (bc *Blockchain) GetFulTXElect(args *GetTransactionReply, reply *GetLatestB
 					lines = append(lines, "}")
 					reply.JSONString = strings.Join(lines, "\n")
 					segTx.ToHex(true) //("True")
-					log.Println("Transaction exists in the blockchain.")
+					log.Println("Transaction Gotten from the blockchain.")
+					//isMined = true
 					break
 				}
 			} else {
@@ -433,20 +434,81 @@ func (bc *Blockchain) GetFulTXElect(args *GetTransactionReply, reply *GetLatestB
 					reply.JSONString = strings.Join(lines, "\n")
 					trnx.ToHex(true)
 					//reply.JSONString = trnx.ToString() //("True")
-					log.Println("Transaction exists in the blockchain.")
+					log.Println("Transaction Gotten from the blockchain.")
+					//isMined = true
 					break
 				}
 
 			}
 		}
-
+		if k == (len(bc.Blocks) - 1) {
+			log.Println("Transaction not found on chain")
+			notMined = true
+		}
+	}
+	if notMined {
+		log.Println("Checking Mempool for Transaction.", notMined)
+		txDetail, exist := bc.Mempool.GetTransaction(args.TransactionID)
+		if exist {
+			if IsSegWitTransaction(txDetail) {
+				txS := hex.EncodeToString(txDetail)
+				segTx, err := trx.FromSegWitHex(txS)
+				if err != nil {
+					log.Println("Decode Genesis Hex Error:", err)
+				}
+				//if hex.EncodeToString(segTx.ID) == args.TransactionID {
+				var lines []string
+				lines = append(lines, "{")
+				lines = append(lines, fmt.Sprintf("	\"blockhash\": \"%x\",", []byte{0x00}))
+				lines = append(lines, fmt.Sprintf("	\"blocktime\": %d,", 0))
+				lines = append(lines, fmt.Sprintf("	\"confirmations\": %d,", 0))
+				lines = append(lines, fmt.Sprintf(" \"hash\": \"%x\",", segTx.ID))
+				lines = append(lines, fmt.Sprintf(" \"hex\": \"%x\",", []byte{0x00}))
+				//lines = append(lines, fmt.Sprintf("	\"locktime\": %d,", 0))
+				lines = append(lines, fmt.Sprintf(" \"size\": %x,", byte(len([]byte{0x00}))))
+				lines = append(lines, fmt.Sprintf("	\"time\": %d,", 0))
+				lines = append(lines, fmt.Sprintf(" \"txid\": \"%x\",", segTx.ID))
+				lines = append(lines, fmt.Sprintf(" \"height\": %d,", 0))
+				lines = append(lines, segTx.ToString())
+				trxhex, _ := segTx.ToHex(false)
+				lines = append(lines, fmt.Sprintf(" \"transactionHex\": \"%s\"", trxhex))
+				lines = append(lines, "}")
+				reply.JSONString = strings.Join(lines, "\n")
+				segTx.ToHex(true) //("True")
+				//}
+			} else {
+				txS := hex.EncodeToString(txDetail)
+				trnx, err := trx.FromHex(txS)
+				if err != nil {
+					log.Println("Decode Genesis Hex Error:", err)
+				}
+				var lines []string
+				lines = append(lines, "{")
+				lines = append(lines, fmt.Sprintf("	\"blockhash\": \"%x\",", []byte{0x00}))
+				lines = append(lines, fmt.Sprintf("	\"blocktime\": %d,", 0))
+				lines = append(lines, fmt.Sprintf("	\"confirmations\": %d,", 0))
+				lines = append(lines, fmt.Sprintf(" \"hash\": \"%x\",", trnx.ID))
+				lines = append(lines, fmt.Sprintf(" \"hex\": \"%x\",", []byte{0x00}))
+				//lines = append(lines, fmt.Sprintf("	\"locktime\": %d,", 0))
+				lines = append(lines, fmt.Sprintf(" \"size\": %x,", byte(len([]byte{0x00}))))
+				lines = append(lines, fmt.Sprintf("	\"time\": %d,", 0))
+				lines = append(lines, fmt.Sprintf(" \"txid\": \"%x\",", trnx.ID))
+				lines = append(lines, fmt.Sprintf(" \"height\": %d,", 0))
+				lines = append(lines, trnx.ToString())
+				trxhex, _ := trnx.ToHex(false)
+				lines = append(lines, fmt.Sprintf(" \"transactionHex\": \"%s\"", trxhex))
+				lines = append(lines, "}")
+				reply.JSONString = strings.Join(lines, "\n")
+				trnx.ToHex(true)
+			}
+		}
 	}
 	return nil
 }
 func (bc *Blockchain) GetFulTX(args *GetTransactionReply, reply *GetLatestBlockReply) error {
 	//var isExist bool
-
-	for _, block := range bc.Blocks {
+	notMined := false
+	for k, block := range bc.Blocks {
 
 		for _, txDetail := range block.Transactions {
 			if IsSegWitTransaction(txDetail) {
@@ -470,6 +532,7 @@ func (bc *Blockchain) GetFulTX(args *GetTransactionReply, reply *GetLatestBlockR
 					reply.JSONString = strings.Join(lines, "\n")
 					segTx.ToHex(true) //("True")
 					log.Println("Transaction exists in the blockchain.")
+					//isMined = true
 					break
 				}
 			} else {
@@ -494,12 +557,73 @@ func (bc *Blockchain) GetFulTX(args *GetTransactionReply, reply *GetLatestBlockR
 					trnx.ToHex(true)
 					//reply.JSONString = trnx.ToString() //("True")
 					log.Println("Transaction exists in the blockchain.")
+					//	isMined = true
 					break
 				}
 
 			}
 		}
+		if k == (len(bc.Blocks) - 1) {
+			log.Println("Transaction not found on chain")
+			notMined = true
+		}
+	}
+	if notMined {
+		log.Println("Checking Mempool for Transaction.", notMined)
+		txDetail, exist := bc.Mempool.GetTransaction(args.TransactionID)
+		if exist {
+			if IsSegWitTransaction(txDetail) {
+				txS := hex.EncodeToString(txDetail)
+				segTx, err := trx.FromSegWitHex(txS)
+				if err != nil {
+					log.Println("Decode Genesis Hex Error:", err)
+				}
+				//	if hex.EncodeToString(segTx.ID) == args.TransactionID {
+				var lines []string
+				lines = append(lines, fmt.Sprintf("BlockHash: %x", 0))
+				lines = append(lines, fmt.Sprintf("Height: %d", 0))
+				lines = append(lines, fmt.Sprintf("Hex: %x", []byte{0x0}))
+				lines = append(lines, fmt.Sprintf("Confirmations: %d", 0))
+				lines = append(lines, fmt.Sprintf("Size: %x", byte(len([]byte{0x0}))))
+				lines = append(lines, fmt.Sprintf("Hash: %x", segTx.ID))
+				lines = append(lines, fmt.Sprintf("Time: %d", 0))
+				lines = append(lines, segTx.ToString())
+				trxhex, _ := segTx.ToHex(false)
+				lines = append(lines, fmt.Sprintf("TransactionHex: %s", trxhex))
+				reply.JSONString = strings.Join(lines, "\n")
+				segTx.ToHex(true) //("True")
+				log.Println("Transaction exists in the blockchain.")
+				//isMined = true
 
+				//	}
+			} else {
+				txS := hex.EncodeToString(txDetail)
+				trnx, err := trx.FromHex(txS)
+				if err != nil {
+					log.Println("Decode Genesis Hex Error:", err)
+				}
+				//if hex.EncodeToString(trnx.ID) == args.TransactionID {
+				var lines []string
+				lines = append(lines, fmt.Sprintf("BlockHash: %x", 0))
+				lines = append(lines, fmt.Sprintf("Height: %d", 0))
+				lines = append(lines, fmt.Sprintf("Hex: %x", []byte{0x0}))
+				lines = append(lines, fmt.Sprintf("Size: %x", byte(len([]byte{0x0}))))
+				lines = append(lines, fmt.Sprintf("Confirmations: %d", 0))
+				lines = append(lines, fmt.Sprintf("Hash: %x", trnx.ID))
+				lines = append(lines, fmt.Sprintf("Time: %d", 0))
+				lines = append(lines, trnx.ToString())
+				trxhex, _ := trnx.ToHex(false)
+				lines = append(lines, fmt.Sprintf("TransactionHex: %s", trxhex))
+				reply.JSONString = strings.Join(lines, "\n")
+				trnx.ToHex(true)
+				//reply.JSONString = trnx.ToString() //("True")
+				log.Println("Transaction exists in the blockchain.")
+				//	isMined = true
+
+				//}
+
+			}
+		}
 	}
 	return nil
 }

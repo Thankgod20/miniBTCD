@@ -11,7 +11,7 @@ import (
 
 func AddBlock(transactions [][]byte /*[]*trx.Transaction*/, bc *blockchain.Blockchain) { //miner string) {
 	// Remove transactions from the mempool
-	for _, tx := range transactions {
+	for i, tx := range transactions {
 		if blockchain.IsSegWitTransaction(tx) {
 			txS := hex.EncodeToString(tx)
 			segTx, err := trx.FromSegWitHex(txS)
@@ -24,7 +24,12 @@ func AddBlock(transactions [][]byte /*[]*trx.Transaction*/, bc *blockchain.Block
 			for _, block := range bc.Blocks {
 				if block.VerifyTransaction(segTx.ID) {
 					log.Println("Transaction exists in the blockchain.")
-					block.RemoveTransaction(segTx.ID)
+					for j, txx := range transactions {
+						if j != i {
+							transactions = append(transactions, txx)
+						}
+					}
+					//block.RemoveTransaction(segTx.ID)
 					log.Println("Transaction Removed From the Block.")
 					//return
 				}
@@ -40,10 +45,14 @@ func AddBlock(transactions [][]byte /*[]*trx.Transaction*/, bc *blockchain.Block
 			bc.IndexTrx.IndexMempoolTransaction(txn, true)
 			log.Println("Removing from Mempool:", (hex.EncodeToString(txn.ID)))
 			// Check if transaction exists in any block
-			for _, block := range bc.Blocks {
+			for ix, block := range bc.Blocks {
 				if block.VerifyTransaction(txn.ID) {
 					log.Println("Transaction exists in the blockchain.")
-					block.RemoveTransaction(txn.ID)
+					for j, txx := range transactions {
+						if j != ix {
+							transactions = append(transactions, txx)
+						}
+					}
 					log.Println("Transaction Removed From the Block.")
 					//return
 				}

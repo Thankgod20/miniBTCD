@@ -309,7 +309,7 @@ func getAddressFromSig(input trx.TXInput) string {
 	var address string
 
 	//signature
-	if input.Sig[:2] == "47" {
+	if input.Sig[:2] == "47" || input.Sig[:2] == "48" {
 		sliptSig := strings.Split(input.Sig[2:], "0121")
 		//signature = sliptSig[0]
 		publkey_, err := hex.DecodeString(sliptSig[1])
@@ -326,7 +326,7 @@ func getAddressFromSig(input trx.TXInput) string {
 		binaryAddress := append(versionedPayload, checksum...)
 		//Convert the binary address to Base58.
 		address = wallet.Base58Encode(binaryAddress)
-	} else if input.Sig[:4] == "0047" {
+	} else if input.Sig[:4] == "0047" || input.Sig[:4] == "0048" {
 		sliptSig := strings.Split(input.Sig[4:], "0147")
 
 		publkey_, err := hex.DecodeString(sliptSig[1])
