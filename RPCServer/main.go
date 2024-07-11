@@ -29,7 +29,7 @@ func main() {
 	})
 
 	// Initialize blockchain
-	bc := blockchain.NewBlockchain(rdb)
+	bc := blockchain.NewBlockchain(rdb, *address)
 	log.Println("Start")
 	switch {
 	case *miningx:

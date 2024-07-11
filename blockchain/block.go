@@ -76,8 +76,8 @@ func NewBlock(height int, transactions [][]byte, prevBlockHash []byte) *Block {
 	return block
 }
 
-func GenesisBlock() *Block {
-	tx := trx.CreateGenesisCoinbase("Genesis", "19z4W1LYKvdgdy8iA9sR9fo7dpKbTsZsQG", 1000)
+func GenesisBlock(address string) *Block {
+	tx := trx.CreateGenesisCoinbase("Genesis", address, 1000)
 
 	//trxString := tx.ToString()
 	txx, _ := tx.ToHex(false) //TransactionToHex(tx, false)

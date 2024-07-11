@@ -165,7 +165,7 @@ func ToBlockString(bc Block) string {
 	return strings.Join(lines, "\n")
 }
 
-func NewBlockchain(rdb *redis.Client) *Blockchain {
+func NewBlockchain(rdb *redis.Client, address string) *Blockchain {
 
 	bc := &Blockchain{
 		Blocks:   []*Block{}, //[]*Block{genesisBlock},
@@ -177,7 +177,7 @@ func NewBlockchain(rdb *redis.Client) *Blockchain {
 	bc.LoadBlocks()
 
 	if len(bc.Blocks) == 0 {
-		genesisBlock := GenesisBlock()
+		genesisBlock := GenesisBlock(address)
 
 		bc.Blocks = append(bc.Blocks, genesisBlock)
 		bc.SaveBlock(genesisBlock)

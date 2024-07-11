@@ -72,8 +72,10 @@ go run main.go
 To enable mining, provide the `--mining` flag along with the `--address` of the miner and the `--time` interval in minutes:
 
 ```sh
-go run main.go --mining --address "your-miner-address" --time 10
+go run main.go --mining --address="your-miner-address" --time=10
 ```
+
+Starting The blockchain for the first time, the miner-address is same as the first genesis address to recieve the first 1000 BTC
 
 ### How the Server Works
 
@@ -186,67 +188,67 @@ go run main.go --blockheight
 #### Create a New Wallet
 
 ```sh
-go run main.go --newWallet "your-seed-phrase" --bech32
+go run main.go --newWallet="your-seed-phrase" --bech32
 ```
 
 or
 
 ```sh
-go run main.go --newWallet "your-seed-phrase" --p2pkh
+go run main.go --newWallet="your-seed-phrase" --p2pkh
 ```
 
 or
 
 ```sh
-go run main.go --newWallet "your-seed-phrase" --p2sh
+go run main.go --newWallet="your-seed-phrase" --p2sh
 ```
 
 #### Check Wallet Balance
 
 ```sh
-go run main.go --wallet --balance "wallet-address"
+go run main.go --wallet --balance="wallet-address"
 ```
 
 #### Create a Transaction
 
 ```sh
-go run main.go --wallet --createtx "your-seed-phrase" --to "recipient-address" --amount 10 --wallettype "p2pkh" --fees 0.0001
+go run main.go --wallet --createtx="your-seed-phrase" --to="recipient-address" --amount=10 --wallettype="p2pkh" --fees=0.0001
 ```
 
 #### Decode a Transaction
 
 ```sh
-go run main.go --decodetx "transaction-hex"
+go run main.go --decodetx="transaction-hex"
 ```
 
 #### Broadcast a Transaction
 
 ```sh
-go run main.go --broadcast "transaction-hex"
+go run main.go --broadcast="transaction-hex"
 ```
 
 #### Verify a Transaction
 
 ```sh
-go run main.go --verifytxID "transaction-id"
+go run main.go --verifytxID="transaction-id"
 ```
 
 #### Get Transaction Details
 
 ```sh
-go run main.go --getTrx "transaction-id"
+go run main.go --getTrx="transaction-id"
 ```
 
 #### Get Block Details
 
 ```sh
-go run main.go --getblock "block-id"
+go run main.go --getblock="block-id"
 ```
 
 #### Get Address Transaction History
 
 ```sh
-go run main.go --trnxs "wallet-address"
+go run main.go --trnxs="wallet-address"
 ```
 
 ## Usage
