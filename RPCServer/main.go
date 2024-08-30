@@ -72,13 +72,13 @@ func main() {
 	// Register the RPC service
 	rpc.Register(bc)
 	// Start listening for RPC requests
-	listener, err := net.Listen("tcp", ":18885")
+	listener, err := net.Listen("tcp", "http://127.0.0.1:18885")
 	if err != nil {
 		log.Fatalf("Failed to start RPC server: %v", err)
 	}
 	defer listener.Close()
 
-	log.Println("Starting RPC server on :X18885")
+	log.Println("Starting RPC server on :18885")
 	for {
 
 		conn, err := listener.Accept()
