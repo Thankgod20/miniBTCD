@@ -81,10 +81,10 @@ func main() {
 							for _, addr := range data.Address {
 								//fmt.Println("Address:-", addr)
 								trns := bc.Mempool.GetTransactions()
-								allowMine := mining.CheckInputAddress(trns, bc, addr)
+								allowMine, allwTx := mining.CheckInputAddress(trns, bc, addr)
 								if allowMine {
 									log.Println("Transaction Found and Address Allowed!!! Mining Transactions To BlockChain")
-									mining.AddBlock(trns, bc)
+									mining.AddBlock(allwTx, bc)
 								}
 							}
 						}
