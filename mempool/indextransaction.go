@@ -30,7 +30,7 @@ func (ntx *IndexTrx) IndexTransaction(tx *trx.Transaction) {
 	defer ntx.mutex.Unlock()
 	for _, input := range tx.Inputs {
 
-		address := getAddressFromSig(input)
+		address := ntx.GetAddressFromSig(input)
 		var pubkeyHex []byte
 		//var pubKeyByte
 		//log.Println("Input Address", address)
@@ -74,7 +74,7 @@ func (ntx *IndexTrx) IndexSegTransaction(tx *trx.SegWit) {
 	defer ntx.mutex.Unlock()
 	for _, input := range tx.Witness {
 
-		address := getSegAddress(input)
+		address := ntx.GetSegAddress(input)
 		pubKeyHasg := GetP2PWKHScript(address)
 		pubkeyHex := hex.EncodeToString(pubKeyHasg)
 
@@ -109,7 +109,7 @@ func (ntx *IndexTrx) IndexMempoolTransaction(tx *trx.Transaction, isDelete bool)
 	defer ntx.mutex.Unlock()
 	for _, input := range tx.Inputs {
 
-		address := getAddressFromSig(input)
+		address := ntx.GetAddressFromSig(input)
 		var pubkeyHex []byte
 		//var pubKeyByte
 		//log.Println("Input Address", address)
@@ -163,7 +163,7 @@ func (ntx *IndexTrx) IndexMempoolSegTransaction(tx *trx.SegWit, isDelete bool) {
 	defer ntx.mutex.Unlock()
 	for _, input := range tx.Witness {
 
-		address := getSegAddress(input)
+		address := ntx.GetSegAddress(input)
 		pubKeyHasg := GetP2PWKHScript(address)
 		pubkeyHex := hex.EncodeToString(pubKeyHasg)
 
@@ -294,7 +294,7 @@ func GetAddressFromScriptHash(out trx.TXOutput) string {
 	}
 	return address
 }
-func getSegAddress(witness [][]byte) string {
+func (ntx *IndexTrx) GetSegAddress(witness [][]byte) string {
 
 	//signatureA = append(signatureA, hex.EncodeToString(witness[0]))
 	publKeyA := witness[1]
@@ -305,7 +305,7 @@ func getSegAddress(witness [][]byte) string {
 	}
 	return bech32Address
 }
-func getAddressFromSig(input trx.TXInput) string {
+func (ntx *IndexTrx) GetAddressFromSig(input trx.TXInput) string {
 	var address string
 
 	//signature

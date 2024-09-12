@@ -9,6 +9,39 @@ import (
 	"github.com/Thankgod20/miniBTCD/trx"
 )
 
+func CheckInputAddress(transactions [][]byte, bc *blockchain.Blockchain, allowedAddress string) bool {
+	for _, tx := range transactions {
+		if blockchain.IsSegWitTransaction(tx) {
+			txS := hex.EncodeToString(tx)
+			segTx, err := trx.FromSegWitHex(txS)
+			if err != nil {
+				log.Println("Decode Genesis Hex Error:", err)
+			}
+			for _, input := range segTx.Witness {
+				address := bc.IndexTrx.GetSegAddress(input)
+				if address == allowedAddress {
+					return true
+				}
+			}
+
+		} else {
+			txS := hex.EncodeToString(tx)
+			txn, err := trx.FromHex(txS)
+			if err != nil {
+				log.Println("Decode Genesis Hex Error:", err)
+			}
+
+			for _, input := range txn.Inputs {
+				address := bc.IndexTrx.GetAddressFromSig(input)
+				if address == allowedAddress {
+					return true
+				}
+			}
+
+		}
+	}
+	return false
+}
 func AddBlock(transactions [][]byte /*[]*trx.Transaction*/, bc *blockchain.Blockchain) { //miner string) {
 	// Remove transactions from the mempool
 	for i, tx := range transactions {

@@ -73,6 +73,19 @@ To enable mining, provide the `--mining` flag along with the `--address` of the 
 
 ```sh
 go run main.go --mining --address="your-miner-address" --time=10
+
+```
+
+To enable selected mining, provide the `--mining` flag along with the `--address` of the miner, the `--time` interval in minutes,`--smining` for enabling selected mining and `--mineaddr` for the path to the json file that contains the address thats allowed to be mined:
+
+```sh
+go run main.go --mining --address="your-miner-address" --time=10 --smining --mineaddr="addresses.json"
+```
+
+To add Selected Address to `addresses.json` go to the Add directory and run
+
+```sh
+go run main.go
 ```
 
 Starting The blockchain for the first time, the miner-address is same as the first genesis address to recieve the first 1000 BTC
