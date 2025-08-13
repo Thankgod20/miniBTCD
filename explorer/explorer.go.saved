@@ -1,0 +1,689 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"html/template"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"net/rpc"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/Thankgod20/miniBTCD/blockchain"
+)
+
+const (
+	MEMPOOL_API_URL     = "https://mempool.space/api"
+	BLOCKSTREAM_API_URL = "https://blockstream.info/api"
+)
+
+// Global RPC client and templates
+var (
+	rpcClient  *rpc.Client
+	templates  *template.Template
+	httpClient = &http.Client{Timeout: 10 * time.Second} // HTTP client for external APIs
+)
+
+// funcMap holds custom functions for use in templates.
+
+var funcMap = template.FuncMap{
+	"add":       func(a, b int) int { return a + b },
+	"subtract":  func(a, b int) int { return a - b },
+	"satsToBTC": func(sats int) float64 { return float64(sats) / 100_000_000 },
+	"timeSince": func(ts int64) string {
+		t := time.Unix(ts, 0)
+		d := time.Since(t)
+		if d.Minutes() < 60 {
+			return fmt.Sprintf("%.0f minutes ago", d.Minutes())
+		}
+		if d.Hours() < 24 {
+			return fmt.Sprintf("%.0f hours ago", d.Hours())
+		}
+		return fmt.Sprintf("%.0f days ago", d.Hours()/24)
+	},
+	"formatFloat": func(f float64) string { return fmt.Sprintf("%.2f", f) },
+}
+
+type MainnetHomeView struct {
+	LatestBlocks    []MempoolBlock
+	MempoolBlocks   []MempoolFeeBlock
+	RecommendedFees RecommendedFees
+	Difficulty      Difficulty
+}
+
+type MempoolBlock struct {
+	ID        string `json:"id"`
+	Height    int    `json:"height"`
+	Timestamp int64  `json:"timestamp"`
+	TxCount   int    `json:"tx_count"`
+	Size      int    `json:"size"`
+	Extras    struct {
+		TotalFees int       `json:"totalFees"`
+		MedianFee float64   `json:"medianFee"`
+		FeeRange  []float64 `json:"feeRange"`
+		Pool      struct {
+			Name string `json:"name"`
+		} `json:"pool"`
+	} `json:"extras"`
+}
+
+type MempoolFeeBlock struct {
+	BlockSize  int       `json:"blockSize"`
+	BlockVSize int       `json:"blockVSize"`
+	NTx        int       `json:"nTx"`
+	TotalFees  int       `json:"totalFees"`
+	MedianFee  float64   `json:"medianFee"`
+	FeeRange   []float64 `json:"feeRange"`
+}
+
+type RecommendedFees struct {
+	FastestFee  int `json:"fastestFee"`
+	HalfHourFee int `json:"halfHourFee"`
+	HourFee     int `json:"hourFee"`
+	EconomyFee  int `json:"economyFee"`
+	MinimumFee  int `json:"minimumFee"`
+}
+
+type Difficulty struct {
+	ProgressPercent       float64 `json:"progressPercent"`
+	DifficultyChange      float64 `json:"difficultyChange"`
+	EstimatedRetargetDate int64   `json:"estimatedRetargetDate"`
+	RemainingBlocks       int     `json:"remainingBlocks"`
+}
+
+// --- Data Structures for Templates ---
+// These structs are used to unmarshal the JSON strings returned by your RPC server.
+// --- NEW: Structs for Bitcoin Mainnet (from Blockstream API) ---
+type BitcoinBlock struct {
+	ID                string `json:"id"`
+	Height            int    `json:"height"`
+	Version           int    `json:"version"`
+	Timestamp         int64  `json:"timestamp"`
+	TxCount           int    `json:"tx_count"`
+	Size              int    `json:"size"`
+	Weight            int    `json:"weight"`
+	MerkleRoot        string `json:"merkle_root"`
+	PreviousBlockHash string `json:"previousblockhash"`
+}
+
+type BitcoinTx struct {
+	Txid     string `json:"txid"`
+	Version  int    `json:"version"`
+	Locktime int    `json:"locktime"`
+	Size     int    `json:"size"`
+	Weight   int    `json:"weight"`
+	Fee      int    `json:"fee"`
+	Vin      []struct {
+		Txid       string       `json:"txid"`
+		Vout       int          `json:"vout"`
+		Prevout    BitcoinTxOut `json:"prevout"`
+		IsCoinbase bool         `json:"is_coinbase"`
+	} `json:"vin"`
+	Vout   []BitcoinTxOut `json:"vout"`
+	Status struct {
+		Confirmed   bool   `json:"confirmed"`
+		BlockHeight int    `json:"block_height"`
+		BlockHash   string `json:"block_hash"`
+	} `json:"status"`
+}
+
+type BitcoinTxOut struct {
+	ScriptPubKeyAddress string `json:"scriptpubkey_address"`
+	Value               int    `json:"value"`
+}
+
+type BitcoinAddress struct {
+	Address    string `json:"address"`
+	ChainStats struct {
+		FundedTxoCount int `json:"funded_txo_count"`
+		FundedTxoSum   int `json:"funded_txo_sum"`
+		SpentTxoCount  int `json:"spent_txo_count"`
+		SpentTxoSum    int `json:"spent_txo_sum"`
+		TxCount        int `json:"tx_count"`
+	} `json:"chain_stats"`
+	MempoolStats struct {
+		TxCount int `json:"tx_count"`
+	} `json:"mempool_stats"`
+}
+type BlockView struct {
+	Hash          string    `json:"Hash"`
+	PrevBlockHash string    `json:"PrevBlockHash"`
+	Height        int       `json:"Height"`
+	Timestamp     int64     `json:"Timestamp"`
+	Nonce         int       `json:"Nonce"`
+	Transactions  []*TXView `json:"Transactions"`
+}
+
+type TXView struct {
+	ID       string         `json:"ID"`
+	Version  int32          `json:"Version"`
+	Locktime int32          `json:"Locktime"`
+	Vin      []TXInputView  `json:"Vin"`
+	Vout     []TXOutputView `json:"Vout"`
+}
+
+type TXInputView struct {
+	Txid      string `json:"Txid"`
+	Vout      int    `json:"Vout"`
+	ScriptSig string `json:"ScriptSig"`
+	Sequence  int32  `json:"Sequence"`
+}
+
+type TXOutputView struct {
+	Value        int    `json:"Value"`
+	ScriptPubKey string `json:"ScriptPubKey"`
+}
+
+type AddressView struct {
+	Address               string
+	Balance               int
+	TransactionHex        []string
+	TransactionHexMempool []string
+}
+
+type HomeView struct {
+	CurrentHeight int
+	LatestBlocks  []BlockView
+}
+
+// --- Main Function ---
+
+func main() {
+	var err error
+	rpcClient, err = rpc.Dial("tcp", "localhost:18885")
+	if err != nil {
+		log.Printf("Warning: Could not connect to local miniBTCD RPC server: %v", err)
+		log.Println("Explorer running in Bitcoin Mainnet-only mode.")
+	} else {
+		log.Println("Successfully connected to miniBTCD RPC server.")
+	}
+
+	templates = template.Must(template.New("").Funcs(funcMap).ParseGlob("templates/*.html"))
+
+	// Setup static file server
+	fs := http.FileServer(http.Dir("static"))
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
+
+	// --- CORRECTED ROUTING SECTION ---
+
+	// The homepage ("/") is now the mainnet dashboard. THIS IS THE ONLY "/" HANDLER.
+	http.HandleFunc("/", mainnetHomeHandler)
+
+	// The search handler remains the same
+	http.HandleFunc("/search", searchHandler)
+
+	// Local miniBTCD routes are now prefixed with "/lnd/" to avoid conflicts
+	http.HandleFunc("/lnd/block/", blockHandler)
+	http.HandleFunc("/lnd/tx/", txHandler)
+	http.HandleFunc("/lnd/address/", addressHandler)
+
+	// Bitcoin Mainnet search result routes remain the same
+	http.HandleFunc("/mainnet/block/", mainnetBlockHandler)
+	http.HandleFunc("/mainnet/tx/", mainnetTxHandler)
+	http.HandleFunc("/mainnet/address/", mainnetAddressHandler)
+
+	// --- END OF CORRECTED ROUTING SECTION ---
+
+	log.Println("Starting Hybrid CryptoNetX explorer on http://localhost:8081")
+	log.Fatal(http.ListenAndServe(":8081", nil))
+}
+
+/*
+func main() {
+	// 1. Connect to the miniBTCD RPC server
+	var err error
+	rpcClient, err = rpc.Dial("tcp", "localhost:18885")
+	if err != nil {
+		log.Fatalf("Failed to connect to RPC server. Is the miniBTCD server running? Error: %v", err)
+	}
+	log.Println("Successfully connected to miniBTCD RPC server.")
+
+	// 2. Create a new template, add our FuncMap, and then parse the files.
+	// This fixes the "add" function error by making it available to all templates.
+	templates = template.Must(template.New("").Funcs(funcMap).ParseGlob("templates/*.html"))
+
+	// 3. Setup HTTP routes
+	fs := http.FileServer(http.Dir("static"))
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
+	http.HandleFunc("/", homeHandler)
+	http.HandleFunc("/", mainnetHomeHandler)
+	http.HandleFunc("/search", searchHandler)
+	// NEW: Bitcoin Mainnet routes
+	http.HandleFunc("/mainnet/block/", mainnetBlockHandler)
+	http.HandleFunc("/mainnet/tx/", mainnetTxHandler)
+	http.HandleFunc("/mainnet/address/", mainnetAddressHandler)
+	//http.HandleFunc("/search", searchHandler)
+	http.HandleFunc("/block/", blockHandler)
+	http.HandleFunc("/tx/", txHandler)
+	http.HandleFunc("/address/", addressHandler)
+
+	// 4. Start the web server
+	log.Println("Starting CryptoNetX explorer on http://localhost:8081")
+	log.Fatal(http.ListenAndServe(":8081", nil))
+}
+*/
+// --- HTTP Handlers ---
+
+func homeHandler(w http.ResponseWriter, r *http.Request) {
+	height, err := getCurrentHeight()
+	if err != nil {
+		renderError(w, "Could not fetch chain height", err)
+		return
+	}
+
+	var latestBlocks []BlockView
+	// Fetch the last 10 blocks for the homepage
+	for i := height; i > height-10 && i >= 0; i-- {
+		block, err := getBlockByHeight(i)
+		if err != nil {
+			log.Printf("Could not fetch block at height %d: %v", i, err)
+			continue
+		}
+		latestBlocks = append(latestBlocks, block)
+	}
+
+	data := HomeView{
+		CurrentHeight: height,
+		LatestBlocks:  latestBlocks,
+	}
+
+	err = templates.ExecuteTemplate(w, "home.html", data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// --- NEW: Mainnet Homepage Handler ---
+func mainnetHomeHandler(w http.ResponseWriter, r *http.Request) {
+	var wg sync.WaitGroup
+	data := MainnetHomeView{}
+
+	// Fetch data from multiple endpoints concurrently
+	endpoints := map[string]interface{}{
+		"/v1/blocks":                &data.LatestBlocks,
+		"/v1/fees/mempool-blocks":   &data.MempoolBlocks,
+		"/v1/fees/recommended":      &data.RecommendedFees,
+		"/v1/difficulty-adjustment": &data.Difficulty,
+	}
+
+	for endpoint, target := range endpoints {
+		wg.Add(1)
+		go func(ep string, t interface{}) {
+			defer wg.Done()
+			err := getJSON(MEMPOOL_API_URL+ep, t)
+			if err != nil {
+				log.Printf("Failed to fetch from %s: %v", ep, err)
+			}
+		}(endpoint, target)
+	}
+
+	wg.Wait() // Wait for all API calls to complete
+
+	// For display, only show the first 4 latest blocks and 4 mempool blocks
+	if len(data.LatestBlocks) > 4 {
+		data.LatestBlocks = data.LatestBlocks[:4]
+	}
+	if len(data.MempoolBlocks) > 4 {
+		data.MempoolBlocks = data.MempoolBlocks[:4]
+	}
+
+	err := templates.ExecuteTemplate(w, "home.html", data)
+	if err != nil {
+		renderError(w, "Failed to render homepage", err)
+	}
+}
+
+// --- HYBRID SEARCH HANDLER ---
+func searchHandler(w http.ResponseWriter, r *http.Request) {
+	query := strings.TrimSpace(r.FormValue("query"))
+	if query == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	// --- 1. SEARCH LOCAL miniBTCD BLOCKCHAIN FIRST ---
+	if rpcClient != nil {
+		if _, err := strconv.Atoi(query); err == nil {
+			if _, err := getBlockByHeight(stringToInt(query)); err == nil {
+				http.Redirect(w, r, "/block/"+query, http.StatusSeeOther)
+				return
+			}
+		} else if len(query) == 64 {
+			if _, err := getBlockByHash(query); err == nil {
+				http.Redirect(w, r, "/block/"+query, http.StatusSeeOther)
+				return
+			}
+			if _, err := getFullTx(query); err == nil {
+				http.Redirect(w, r, "/tx/"+query, http.StatusSeeOther)
+				return
+			}
+		} else if strings.HasPrefix(query, "1") || strings.HasPrefix(query, "3") || strings.HasPrefix(query, "bc1") {
+			if _, err := getAddressBalance(query); err == nil {
+				http.Redirect(w, r, "/address/"+query, http.StatusSeeOther)
+				return
+			}
+		}
+	}
+
+	// --- 2. IF NOT FOUND LOCALLY, SEARCH BITCOIN MAINNET ---
+	log.Printf("Query '%s' not found on local chain. Searching Bitcoin Mainnet...", query)
+	if _, err := strconv.Atoi(query); err == nil {
+		hash, err := getBitcoinBlockHashFromHeight(query)
+		if err == nil {
+			http.Redirect(w, r, "/mainnet/block/"+hash, http.StatusSeeOther)
+			return
+		}
+	} else if len(query) == 64 {
+		if _, err := getBitcoinBlock(query); err == nil {
+			http.Redirect(w, r, "/mainnet/block/"+query, http.StatusSeeOther)
+			return
+		}
+		if _, err := getBitcoinTx(query); err == nil {
+			http.Redirect(w, r, "/mainnet/tx/"+query, http.StatusSeeOther)
+			return
+		}
+	} else if strings.HasPrefix(query, "1") || strings.HasPrefix(query, "3") || strings.HasPrefix(query, "bc1") {
+		if _, err := getBitcoinAddress(query); err == nil {
+			http.Redirect(w, r, "/mainnet/address/"+query, http.StatusSeeOther)
+			return
+		}
+	}
+
+	renderError(w, "Search Not Found", fmt.Errorf("the query '%s' was not found on miniBTCD or Bitcoin Mainnet", query))
+}
+func stringToInt(s string) int {
+	i, _ := strconv.Atoi(s)
+	return i
+}
+
+// --- NEW: Bitcoin Mainnet Handlers ---
+func mainnetBlockHandler(w http.ResponseWriter, r *http.Request) {
+	hash := strings.TrimPrefix(r.URL.Path, "/mainnet/block/")
+	block, err := getBitcoinBlock(hash)
+	if err != nil {
+		renderError(w, "Bitcoin Block Not Found", err)
+		return
+	}
+	templates.ExecuteTemplate(w, "mainnet_block.html", block)
+}
+
+func mainnetTxHandler(w http.ResponseWriter, r *http.Request) {
+	txid := strings.TrimPrefix(r.URL.Path, "/mainnet/tx/")
+	tx, err := getBitcoinTx(txid)
+	if err != nil {
+		renderError(w, "Bitcoin Transaction Not Found", err)
+		return
+	}
+	templates.ExecuteTemplate(w, "mainnet_transaction.html", tx)
+}
+
+func mainnetAddressHandler(w http.ResponseWriter, r *http.Request) {
+	address := strings.TrimPrefix(r.URL.Path, "/mainnet/address/")
+	addrInfo, err := getBitcoinAddress(address)
+	if err != nil {
+		renderError(w, "Bitcoin Address Not Found", err)
+		return
+	}
+	templates.ExecuteTemplate(w, "mainnet_address.html", addrInfo)
+}
+
+// --- NEW: Bitcoin Mainnet API Helpers ---
+func getBitcoinBlock(hash string) (BitcoinBlock, error) {
+	var block BitcoinBlock
+	err := getJSON(fmt.Sprintf("%s/block/%s", BLOCKSTREAM_API_URL, hash), &block)
+	return block, err
+}
+
+func getBitcoinTx(txid string) (BitcoinTx, error) {
+	var tx BitcoinTx
+	err := getJSON(fmt.Sprintf("%s/tx/%s", BLOCKSTREAM_API_URL, txid), &tx)
+	return tx, err
+}
+
+func getBitcoinAddress(address string) (BitcoinAddress, error) {
+	var addr BitcoinAddress
+	err := getJSON(fmt.Sprintf("%s/address/%s", BLOCKSTREAM_API_URL, address), &addr)
+	return addr, err
+}
+
+func getBitcoinBlockHashFromHeight(height string) (string, error) {
+	url := fmt.Sprintf("%s/block-height/%s", BLOCKSTREAM_API_URL, height)
+	resp, err := httpClient.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("API returned status %s", resp.Status)
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+// Generic helper to fetch and unmarshal JSON from an API
+func getJSON(url string, target interface{}) error {
+	resp, err := httpClient.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API request failed with status: %s", resp.Status)
+	}
+
+	return json.NewDecoder(resp.Body).Decode(target)
+}
+
+func blockHandler(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/block/")
+	var block BlockView
+	var err error
+
+	if height, convErr := strconv.Atoi(id); convErr == nil {
+		block, err = getBlockByHeight(height)
+	} else {
+		block, err = getBlockByHash(id)
+	}
+
+	if err != nil {
+		renderError(w, fmt.Sprintf("Block not found: %s", id), err)
+		return
+	}
+
+	err = templates.ExecuteTemplate(w, "block.html", block)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func txHandler(w http.ResponseWriter, r *http.Request) {
+	txid := strings.TrimPrefix(r.URL.Path, "/tx/")
+	if len(txid) != 64 {
+		renderError(w, "Invalid Transaction ID", fmt.Errorf("TXID must be 64 characters long"))
+		return
+	}
+
+	tx, err := getFullTx(txid)
+	if err != nil {
+		renderError(w, "Transaction not found", err)
+		return
+	}
+
+	err = templates.ExecuteTemplate(w, "transaction.html", tx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func addressHandler(w http.ResponseWriter, r *http.Request) {
+	address := strings.TrimPrefix(r.URL.Path, "/address/")
+
+	balance, err := getAddressBalance(address)
+	if err != nil {
+		renderError(w, "Could not fetch balance", err)
+		return
+	}
+
+	history, err := getAddressHistory(address)
+	if err != nil {
+		renderError(w, "Could not fetch history", err)
+		return
+	}
+
+	data := AddressView{
+		Address:               address,
+		Balance:               balance,
+		TransactionHex:        history.TransactionHex,
+		TransactionHexMempool: history.TransactionHexMempool,
+	}
+
+	err = templates.ExecuteTemplate(w, "address.html", data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// --- RPC Helper Functions ---
+
+func getCurrentHeight() (int, error) {
+	args := blockchain.GetLatestBlockArgs{}
+	var reply blockchain.GetLatestBlockReply
+	err := rpcClient.Call("Blockchain.GetCurrentHeight", &args, &reply)
+	if err != nil {
+		return -1, err
+	}
+	var height int
+	err = json.Unmarshal(reply.JSONBlock, &height)
+	return height, err
+}
+
+func getBlockByHash(hash string) (BlockView, error) {
+	args := blockchain.GetBlockArgs{TransactionID: hash}
+	var reply blockchain.GetBlockReply
+	var block BlockView
+
+	err := rpcClient.Call("Blockchain.GetBlockRPC", &args, &reply)
+	if err != nil || reply.Block == "" {
+		return block, fmt.Errorf("block with hash %s not found: %w", hash, err)
+	}
+	err = json.Unmarshal([]byte(reply.Block), &block)
+	return block, err
+}
+
+func getBlockByHeight(height int) (BlockView, error) {
+	var block BlockView
+
+	// Step 1: Get latest block
+	var latestReply blockchain.GetLatestBlockReply
+	err := rpcClient.Call("Blockchain.GetLatestBlock", &blockchain.GetLatestBlockArgs{}, &latestReply)
+	if err != nil {
+		return block, fmt.Errorf("failed to get latest block: %w", err)
+	}
+	err = json.Unmarshal(latestReply.JSONBlock, &block)
+	if err != nil {
+		return block, fmt.Errorf("failed to parse latest block: %w", err)
+	}
+
+	// Step 2: Walk backwards until we hit the target height
+	for block.Height > height {
+		if len(block.Transactions) == 0 {
+			return block, fmt.Errorf("no transactions in block at height %d", block.Height)
+		}
+
+		// Use the first transaction's ID to fetch the previous block
+		prevTxID := block.Transactions[0].ID
+
+		var prevReply blockchain.GetBlockReply
+		err := rpcClient.Call("Blockchain.GetBlockRPC",
+			&blockchain.GetBlockArgs{TransactionID: prevTxID},
+			&prevReply)
+		if err != nil {
+			return block, fmt.Errorf("failed to get block for tx %s: %w", prevTxID, err)
+		}
+
+		if prevReply.Block == "" {
+			return block, fmt.Errorf("block not found for tx %s", prevTxID)
+		}
+
+		err = json.Unmarshal([]byte(prevReply.Block), &block)
+		if err != nil {
+			return block, fmt.Errorf("failed to parse block JSON: %w", err)
+		}
+	}
+
+	if block.Height != height {
+		return block, fmt.Errorf("block at height %d not found", height)
+	}
+
+	return block, nil
+}
+
+func getBlockByTxid(txid string) (BlockView, error) {
+	args := blockchain.GetBlockArgs{TransactionID: txid}
+	var reply blockchain.GetBlockReply
+	var block BlockView
+
+	err := rpcClient.Call("Blockchain.GetBlockRPC", &args, &reply)
+	if err != nil || reply.Block == "" {
+		return block, fmt.Errorf("block for txid %s not found: %w", txid, err)
+	}
+	err = json.Unmarshal([]byte(reply.Block), &block)
+	return block, err
+}
+
+func getFullTx(txid string) (TXView, error) {
+	args := blockchain.GetVerifyTransactionArgs{TransactionID: txid}
+	var reply blockchain.GetLatestBlockReply
+	var tx TXView
+
+	err := rpcClient.Call("Blockchain.GetFulTXElect", &args, &reply)
+	if err != nil {
+		return tx, err
+	}
+	if reply.JSONString == "" || reply.JSONString == "null" {
+		return tx, fmt.Errorf("transaction %s not found", txid)
+	}
+
+	err = json.Unmarshal([]byte(reply.JSONString), &tx)
+	return tx, err
+}
+
+func getAddressBalance(address string) (int, error) {
+	args := blockchain.GetBalanceArgs{Address: address}
+	var reply blockchain.GetLatestBlockReply
+	err := rpcClient.Call("Blockchain.GetBalance", &args, &reply)
+	if err != nil {
+		return 0, err
+	}
+	var balance int
+	err = json.Unmarshal(reply.JSONBlock, &balance)
+	return balance, err
+}
+
+func getAddressHistory(address string) (blockchain.GetAddressHistoryReply, error) {
+	args := blockchain.GetAddressHistoryArgs{Address: address}
+	var reply blockchain.GetAddressHistoryReply
+	err := rpcClient.Call("Blockchain.GetTransactionHistory", &args, &reply)
+	return reply, err
+}
+
+func renderError(w http.ResponseWriter, message string, err error) {
+	log.Printf("ERROR: %s - %v", message, err)
+	w.WriteHeader(http.StatusNotFound)
+	data := struct {
+		Title   string
+		Message string
+	}{
+		Title:   message,
+		Message: err.Error(),
+	}
+	templates.ExecuteTemplate(w, "error.html", data)
+}

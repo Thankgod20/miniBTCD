@@ -1,0 +1,99 @@
+{{define "content"}}
+
+<section class="hero">
+    <div class="container">
+        <h1>Hybrid Blockchain Explorer</h1>
+        <p>Explore both your Crypotnetx Lnd Chain and the Bitcoin mainnet in one powerful interface</p>
+    </div>
+</section>
+
+<div class="container">
+    <div class="network-tabs">
+        <div class="tab active">Bitcoin Mainnet</div>
+        <div class="tab">Lnd Chain</div>
+    </div>
+    
+    <div class="stats-container">
+        <div class="stat-card">
+            <div class="label">Latest Block</div>
+            <div class="value">{{.Stats.LatestBlockHeight}}</div>
+            <div class="subtext">Current block height</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="label">Avg. Block Time</div>
+            <div class="value">{{.Stats.AvgBlockTime | printf "%.1f"}}m</div>
+            <div class="subtext">Last 12 blocks</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="label">Avg. TXs/Block</div>
+            <div class="value">{{.Stats.AvgTxsPerBlock | printf "%.0f"}}</div>
+            <div class="subtext">{{.Stats.TotalTxsInView}} TXs in view</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="label">Network</div>
+            <div class="value">Bitcoin</div>
+            <div class="subtext">Mainnet</div>
+        </div>
+    </div>
+    
+    <h2 class="section-title">
+        Latest Blocks
+        <a href="#" style="font-size: 1rem; font-weight: normal;">View all blocks</a>
+    </h2>
+    
+    <div class="blocks-grid">
+        {{range .LatestBlocks}}
+        <a href="/mainnet/block/{{.ID}}" class="block-card">
+            <div class="block-header">
+                <div class="block-height">Block #{{.Height}}</div>
+                <div class="block-timestamp">{{.Timestamp | timeSince}}</div>
+            </div>
+            
+            <div class="block-hash">{{.ID}}</div>
+            
+            <div class="block-stats">
+                <div class="block-stat">
+                    <div class="label">Transactions</div>
+                    <div class="value">{{.TxCount}}</div>
+                </div>
+                
+                <div class="block-stat">
+                    <div class="label">Size</div>
+                    <div class="value">{{.Size}} bytes</div>
+                </div>
+                
+                <div class="block-stat">
+                    <div class="label">Weight</div>
+                    <div class="value">{{.Weight}} WU</div>
+                </div>
+                
+                <div class="block-stat">
+                    <div class="label">Version</div>
+                    <div class="value">0x{{printf "%x" .Version}}</div>
+                </div>
+            </div>
+        </a>
+        {{end}}
+    </div>
+</div>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="copyright">
+                &copy; 2023 CryptoNetX Explorer. All rights reserved.
+            </div>
+            
+            <div class="footer-links">
+                <a href="https://cryptonetx.com" class="footer-link">CryptoNetX</a>
+                <a href="https://cryptonetx.com" class="footer-link">About us</a>
+                <a href="https://cryptonetx.com" class="footer-link">Plans</a>
+                <a href="https://cryptonetx.com" class="footer-link">Contact</a>
+            </div>
+        </div>
+    </div>
+</footer>
+{{end}}

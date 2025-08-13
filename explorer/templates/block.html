@@ -1,0 +1,42 @@
+<!-- templates/block.html -->
+{{define "content"}}
+<h1><span class="icon">📦</span> Block #{{.Height}}</h1>
+
+<div class="card">
+    <h2>Block Summary</h2>
+    <div class="info-grid">
+        <div class="label">Block Hash</div><div class="value">{{.Hash}}</div>
+        <div class="label">Previous Hash</div><div class="value"><a href="/block/{{.PrevBlockHash}}">{{.PrevBlockHash}}</a></div>
+        <div class="label">Timestamp</div><div class="value">{{.Timestamp}}</div>
+        <div class="label">Nonce</div><div class="value">{{.Nonce}}</div>
+        <div class="label">Transactions</div><div class="value">{{len .Transactions}}</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Transactions in this Block</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Transaction ID</th>
+                <th>Inputs</th>
+                <th>Outputs</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Transactions}}
+            <tr>
+                <td><a href="/tx/{{.ID}}">{{.ID}}</a></td>
+                <td>{{len .Vin}}</td>
+                <td>{{len .Vout}}</td>
+            </tr>
+        {{else}}
+            <tr>
+                <td colspan="3">No transactions in this block.</td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+

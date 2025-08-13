@@ -1,0 +1,179 @@
+{{define "content"}}
+<style>
+    /* Re-using the professional styles from other pages */
+    :root {
+        --primary: #2774ca;
+        --secondary: #f7931a;
+        --dark: #1a1a2e;
+        --gray: #6c757d;
+        --border-color: #e9ecef;
+        --border-radius: 0.5rem;
+        --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        --transition: all 0.3s ease;
+    }
+
+    /* General Page Layout */
+    .address-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem 1rem;
+    }
+
+    .section-heading {
+        font-size: 1.75rem;
+        font-weight: 500;
+        color: var(--dark);
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    /* Summary Section */
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2.5rem;
+    }
+    .summary-card, .address-card {
+        background-color: white;
+        padding: 1.25rem;
+        border-radius: var(--border-radius);
+        box-shadow: var(--box-shadow);
+        border: 1px solid var(--border-color);
+    }
+    .summary-card .label, .address-card .label {
+        font-size: 0.9rem;
+        color: var(--gray);
+        margin-bottom: 0.5rem;
+    }
+    .summary-card .value {
+        font-family: 'Roboto Mono', monospace;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--primary);
+    }
+    .summary-card .value.small {
+        font-size: 1.2rem;
+        font-weight: 500;
+        color: var(--dark);
+    }
+    .address-card {
+        margin-bottom: 2.5rem;
+        word-break: break-all;
+    }
+    .address-card .value {
+        font-family: 'Roboto Mono', monospace;
+        font-size: 1.1rem;
+        color: var(--dark);
+    }
+    
+    /* Transaction List Styling */
+    .tx-list-card {
+        background-color: white;
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        margin-bottom: 0.75rem;
+        padding: 1rem 1.25rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        transition: var(--transition);
+    }
+    .tx-list-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(0,0,0,0.07);
+    }
+    .tx-id {
+        font-family: 'Roboto Mono', monospace;
+        word-break: break-all;
+        flex-basis: 70%; /* Give more space to the TXID */
+        flex-grow: 1;
+    }
+    .tx-id a {
+        color: var(--primary);
+        text-decoration: none;
+    }
+    .tx-id a:hover {
+        text-decoration: underline;
+    }
+    .badge {
+        display: inline-block;
+        padding: 0.3rem 0.75rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+        border-radius: 50px;
+        white-space: nowrap;
+    }
+    .badge-confirmed {
+        background-color: rgba(40, 167, 69, 0.1);
+        color: var(--success);
+    }
+    .badge-unconfirmed {
+        background-color: rgba(247, 147, 26, 0.1);
+        color: var(--secondary);
+    }
+
+</style>
+
+<div class="address-container">
+    <h1 class="section-heading">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        Mainnet Address
+    </h1>
+
+    <div class="address-card">
+        <div class="label">Address</div>
+        <div class="value">{{.Address}}</div>
+    </div>
+
+    <!-- Summary Metrics -->
+    <div class="summary-grid">
+        <div class="summary-card">
+            <div class="label">Final Balance</div>
+            <div class="value">{{satsToBTC (subtract .ChainStats.FundedTxoSum .ChainStats.SpentTxoSum) | printf "%.8f"}} BTC</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Total Transactions</div>
+            <div class="value small">{{add .ChainStats.TxCount .MempoolStats.TxCount }}</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Total Received</div>
+            <div class="value small">{{satsToBTC .ChainStats.FundedTxoSum | printf "%.8f"}} BTC</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Total Spent</div>
+            <div class="value small">{{satsToBTC .ChainStats.SpentTxoSum | printf "%.8f"}} BTC</div>
+        </div>
+    </div>
+
+    <!-- Transaction History Section -->
+    <div>
+        <h2 class="section-heading" style="font-size: 1.5rem; margin-top: 3rem;">Transaction History</h2>
+        
+        {{/* Check if the Transactions slice has items */}}
+        {{if .Transactions}}
+            {{range .Transactions}}
+                <div class="tx-list-card">
+                    <div class="tx-id"><a href="/mainnet/tx/{{.Txid}}">{{.Txid}}</a></div>
+                    <div>
+                        {{if .Status.Confirmed}}
+                            <span class="badge badge-confirmed">Confirmed</span>
+                        {{else}}
+                            <span class="badge badge-unconfirmed">Unconfirmed</span>
+                        {{end}}
+                    </div>
+                </div>
+            {{end}}
+        {{else}}
+            {{/* Show this message if the transaction list is empty */}}
+            <div class="summary-card">
+                <p style="color: var(--gray); font-family: 'Roboto', sans-serif;">No transaction history found for this address.</p>
+            </div>
+        {{end}}
+    </div>
+</div>
+{{end}}

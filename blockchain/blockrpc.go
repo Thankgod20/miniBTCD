@@ -2,6 +2,8 @@
 package blockchain
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -168,7 +170,33 @@ func (bc *Blockchain) GetBalance(args *GetBalanceArgs, reply *GetLatestBlockRepl
 	var coinbase string
 	if strings.HasPrefix(args.Address, "1") {
 		// P2PKH Get Public Key Hash from address
-		r_pubKey, _ := trx.Base58Decode(args.Address)
+		r_pubKey, err := trx.Base58Decode(args.Address)
+		if err != nil {
+			// Log the error server-side and return a clean error to the client.
+			log.Printf("Error decoding Base58 address '%s': %v", args.Address, err)
+			return fmt.Errorf("failed to decode base58 address: %w", err)
+		}
+
+		// 2. Validate the length of the decoded payload. It MUST be 25 bytes.
+		if len(r_pubKey) != 25 {
+			log.Printf("Invalid decoded length for address '%s': expected 25, got %d", args.Address, len(r_pubKey))
+			return fmt.Errorf("invalid address format: incorrect decoded length")
+		}
+
+		// 3. (Optional but highly recommended) Verify the checksum.
+		payload := r_pubKey[:21]  // Version byte + public key hash
+		checksum := r_pubKey[21:] // Last 4 bytes
+
+		// Calculate the expected checksum by hashing the payload twice
+		firstSHA := sha256.Sum256(payload)
+		secondSHA := sha256.Sum256(firstSHA[:])
+		expectedChecksum := secondSHA[:4]
+
+		if !bytes.Equal(checksum, expectedChecksum) {
+			log.Printf("Invalid checksum for address '%s'", args.Address)
+			return fmt.Errorf("invalid address: checksum does not match")
+		}
+
 		publickeyhash = hex.EncodeToString(r_pubKey)[2:42]
 		// P2PKH Get length of the byte of the public key hash
 		pubKeyByte, err := hex.DecodeString(publickeyhash)

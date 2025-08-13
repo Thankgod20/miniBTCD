@@ -1,0 +1,231 @@
+{{define "content"}}
+<style>
+    /* Re-using the professional styles from other pages */
+    :root {
+        --primary: #2774ca;
+        --secondary: #f7931a;
+        --dark: #1a1a2e;
+        --light: #f8f9fa;
+        --gray: #6c757d;
+        --success: #28a745;
+        --border-color: #e9ecef;
+        --border-radius: 0.5rem;
+        --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        --transition: all 0.3s ease;
+    }
+
+    /* General Page Layout */
+    .tx-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem 1rem;
+    }
+
+    .section-heading {
+        font-size: 1.75rem;
+        font-weight: 500;
+        color: var(--dark);
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    /* Summary Section */
+    .tx-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    .summary-card, .txid-card {
+        background-color: white;
+        padding: 1.25rem;
+        border-radius: var(--border-radius);
+        box-shadow: var(--box-shadow);
+        border: 1px solid var(--border-color);
+    }
+    .summary-card .label {
+        font-size: 0.9rem;
+        color: var(--gray);
+        margin-bottom: 0.5rem;
+    }
+    .summary-card .value {
+        font-family: 'Roboto Mono', monospace;
+        font-size: 1.25rem;
+        font-weight: 500;
+        color: var(--dark);
+    }
+    .txid-card {
+        margin-bottom: 2.5rem;
+        word-break: break-all;
+    }
+
+    /* Badge Styling */
+    .badge {
+        display: inline-block;
+        padding: 0.3rem 0.75rem;
+        font-family: 'Roboto', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 500;
+        border-radius: 50px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .badge-confirmed {
+        background-color: rgba(40, 167, 69, 0.1);
+        color: var(--success);
+    }
+    .badge-unconfirmed {
+        background-color: rgba(247, 147, 26, 0.1);
+        color: var(--secondary);
+    }
+    .badge-coinbase {
+        background-color: rgba(39, 116, 202, 0.1);
+        color: var(--primary);
+    }
+
+    /* Inputs & Outputs Section */
+    .tx-io-container {
+        display: flex;
+        align-items: flex-start;
+        gap: 1.5rem;
+        flex-wrap: wrap; /* Allows stacking on mobile */
+    }
+    .io-column {
+        flex: 1;
+        min-width: 350px;
+    }
+    .io-column h3 {
+        font-size: 1.25rem;
+        font-weight: 500;
+        margin-top: 0;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--border-color);
+        margin-bottom: 1rem;
+    }
+    .io-card {
+        background-color: white;
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        margin-bottom: 1rem;
+        padding: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        transition: var(--transition);
+    }
+    .io-card:hover {
+        border-color: var(--primary);
+    }
+    .io-address {
+        font-family: 'Roboto Mono', monospace;
+        word-break: break-all;
+    }
+    .io-address a {
+        color: var(--primary);
+        text-decoration: none;
+    }
+    .io-address a:hover {
+        text-decoration: underline;
+    }
+    .io-amount {
+        font-family: 'Roboto Mono', monospace;
+        font-weight: 700;
+        color: var(--dark);
+        white-space: nowrap;
+    }
+    .io-arrow {
+        font-size: 2.5rem;
+        color: var(--gray);
+        margin-top: 2.5rem; /* Align with content below heading */
+    }
+    @media (max-width: 820px) {
+        .io-arrow {
+            display: none; /* Hide arrow on mobile */
+        }
+    }
+
+</style>
+
+<div class="tx-container">
+    <h1 class="section-heading">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+        Mainnet Transaction
+    </h1>
+
+    <!-- Summary Section -->
+    <div class="tx-summary-grid">
+        <div class="summary-card">
+            <div class="label">Status</div>
+            <div class="value">
+                {{if .Status.Confirmed}}
+                    <span class="badge badge-confirmed">Confirmed</span>
+                {{else}}
+                    <span class="badge badge-unconfirmed">Unconfirmed</span>
+                {{end}}
+            </div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Fee</div>
+            <div class="value">{{.Fee }} sats</div>
+        </div>
+        {{if .Status.Confirmed}}
+        <div class="summary-card">
+            <div class="label">Included in Block</div>
+            <div class="value"><a href="/mainnet/block/{{.Status.BlockHash}}">#{{.Status.BlockHeight }}</a></div>
+        </div>
+        {{end}}
+    </div>
+    <div class="txid-card">
+        <div class="label">Transaction ID (TXID)</div>
+        <div class="value" style="font-size: 1rem;">{{.Txid}}</div>
+    </div>
+
+
+    <!-- Inputs and Outputs -->
+    <div class="tx-io-container">
+        <!-- Inputs Column -->
+        <div class="io-column">
+            <h3>Inputs</h3>
+            {{range .Vin}}
+                <div class="io-card">
+                    {{if .IsCoinbase}}
+                        <span class="badge badge-coinbase">Coinbase (Newly Generated Coins)</span>
+                    {{else}}
+                        <div class="io-address">
+                            <a href="/mainnet/address/{{.Prevout.ScriptPubKeyAddress}}">{{.Prevout.ScriptPubKeyAddress}}</a>
+                        </div>
+                        <div class="io-amount">
+                            {{satsToBTC .Prevout.Value | printf "%.8f"}} BTC
+                        </div>
+                    {{end}}
+                </div>
+            {{end}}
+        </div>
+
+        <div class="io-arrow">→</div>
+
+        <!-- Outputs Column -->
+        <div class="io-column">
+            <h3>Outputs</h3>
+            {{range .Vout}}
+                <div class="io-card">
+                    <div class="io-address">
+                        {{if .ScriptPubKeyAddress}}
+                            <a href="/mainnet/address/{{.ScriptPubKeyAddress}}">{{.ScriptPubKeyAddress}}</a>
+                        {{else}}
+                            <span>(OP_RETURN or Unknown Script)</span>
+                        {{end}}
+                    </div>
+                    <div class="io-amount">
+                        {{satsToBTC .Value | printf "%.8f"}} BTC
+                    </div>
+                </div>
+            {{end}}
+        </div>
+    </div>
+</div>
+{{end}}

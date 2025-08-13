@@ -1,0 +1,140 @@
+{{define "content"}}
+<style>
+    /* Re-using the professional styles from other pages */
+    :root {
+        --primary: #2774ca;
+        --secondary: #f7931a;
+        --dark: #1a1a2e;
+        --gray: #6c757d;
+        --border-color: #e9ecef;
+        --border-radius: 0.5rem;
+        --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    /* General Page Layout */
+    .block-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem 1rem;
+    }
+
+    /* Main Heading */
+    h1 {
+        font-size: 1.75rem;
+        font-weight: 500;
+        color: var(--dark);
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    h1 .icon {
+        color: var(--primary);
+        font-size: 1.5rem;
+    }
+
+    /* Card Styling */
+    .card {
+        background-color: white;
+        padding: 1.5rem 2rem;
+        border-radius: var(--border-radius);
+        box-shadow: var(--box-shadow);
+        border: 1px solid var(--border-color);
+    }
+    .card h2 {
+        font-size: 1.25rem;
+        font-weight: 500;
+        margin-top: 0;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    /* The main layout for the details */
+    .info-grid {
+        display: grid;
+        /* Creates a two-column layout. Labels get a fixed width. */
+        grid-template-columns: 200px 1fr;
+        gap: 1.25rem 2rem; /* Vertical and horizontal gap */
+        align-items: center;
+    }
+    .info-grid .label {
+        font-family: 'Roboto', sans-serif;
+        font-weight: 500;
+        color: var(--gray);
+        text-align: right;
+    }
+    .info-grid .value {
+        font-family: 'Roboto Mono', monospace;
+        color: var(--dark);
+        word-break: break-all; /* Prevents long hashes from overflowing */
+        background-color: #e9ecef;
+    }
+    .info-grid .value a {
+        color: var(--primary);
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }
+    .info-grid .value a:hover {
+        text-decoration: underline;
+    }
+
+    /* Responsive Design for mobile */
+    @media (max-width: 768px) {
+        .card {
+            padding: 1.5rem;
+        }
+        .info-grid {
+            /* On small screens, stack into a single column */
+            grid-template-columns: 1fr;
+            gap: 0.5rem;
+        }
+        .info-grid .label {
+            text-align: left;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+        }
+        .info-grid .value {
+            margin-bottom: 1rem; /* Add space between stacked items */
+        }
+    }
+
+</style>
+
+<div class="block-container">
+    {{/* This is your original HTML structure, wrapped in a container for centering */}}
+    <h1>
+        <span class="icon">█</span>
+        Block #{{.Height }}
+    </h1>
+
+    <div class="card">
+        <h2 style="color: #1a1a2e;">Details</h2>
+        <div class="info-grid">
+            <div class="label">Block Hash</div>
+            <div class="value">{{.ID}}</div>
+
+            <div class="label">Height</div>
+            <div class="value">{{.Height }}</div>
+
+            <div class="label">Timestamp</div>
+            <div class="value" style="font-family: 'Roboto', sans-serif;">{{.Timestamp | timeSince}}</div>
+
+            <div class="label">Transactions</div>
+            <div class="value">{{.TxCount }}</div>
+
+            <div class="label">Size</div>
+            <div class="value">{{.Size }} bytes</div>
+
+            <div class="label">Weight</div>
+            <div class="value">{{.Weight }} WU</div>
+            
+            <div class="label">Merkle Root</div>
+            <div class="value">{{.MerkleRoot}}</div>
+
+            <div class="label">Previous Block</div>
+            <div class="value"><a href="/mainnet/block/{{.PreviousBlockHash}}">{{.PreviousBlockHash}}</a></div>
+        </div>
+    </div>
+</div>
+{{end}}

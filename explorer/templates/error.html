@@ -1,0 +1,10 @@
+<!-- templates/error.html -->
+{{define "content"}}
+    <h1>Error: {{.Title}}</h1>
+    <div class="card error">
+        <p>Sorry, an error occurred.</p>
+        <p><strong>Details:</strong> {{.Message}}</p>
+        <a href="/">Go to Homepage</a>
+    </div>
+{{end}}
+

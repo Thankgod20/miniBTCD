@@ -1,0 +1,393 @@
+{{define "_layout.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoNetX | Hybrid Blockchain Explorer</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap">
+    <meta name="description" content="CryptoNetx offers dedicated, high-capacity private Lightning Network liquidity pools (2, 5, 10, 50 BTC) for exchanges, merchants, and power users. Enable seamless, large-scale Bitcoin transactions instantly.">
+    <meta name="keywords" content="private lightning node, lightning network liquidity, large bitcoin transactions, bitcoin payment channels, lightning network pools, high capacity lightning channel, bitcoin scaling solution, fast bitcoin payments, CryptoNetx">
+    <meta name="author" content="CryptoNetx">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://www.cryptonetx.com/">
+    <meta property="og:title" content="CryptoNetx | Private Lightning Network Liquidity">
+    <meta property="og:description" content="Unlock seamless, large-scale Bitcoin payments with CryptoNetx's private Lightning Network liquidity pools. We offer dedicated channels up to 50 BTC.">
+    <meta property="og:image" content="https://www.cryptonetx.com/og-image.png"> <!-- Placeholder for social media image -->
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://www.cryptonetx.com/">
+    <meta property="twitter:title" content="CryptoNetx | Private Lightning Network Liquidity">
+    <meta property="twitter:description" content="Unlock seamless, large-scale Bitcoin payments with CryptoNetx's private Lightning Network liquidity pools. We offer dedicated channels up to 50 BTC.">
+    <meta property="twitter:image" content="https://www.cryptonetx.com/og-image.png"> <!-- Placeholder for social media image -->
+
+    <!-- Favicon -->
+    <link rel="icon" href="https://www.cryptonetx.com/og-image.png" type="image/x-icon">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        :root {
+            --primary: #2774ca;
+            --primary-dark: #1a5da4;
+            --secondary: #f7931a;
+            --dark: #1a1a2e;
+            --light: #f8f9fa;
+            --gray: #6c757d;
+            --success: #28a745;
+            --danger: #dc3545;
+            --border-radius: 0.5rem;
+            --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+        
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        /* Header Styles */
+        header {
+            background: linear-gradient(135deg, var(--dark), var(--primary-dark));
+            color: white;
+            padding: 1rem 0;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            font-size: 1.8rem;
+            font-weight: 700;
+            text-decoration: none;
+            color: white;
+        }
+        
+        .logo span {
+            color: var(--secondary);
+            font-weight: 800;
+        }
+        
+        .search-form {
+            display: flex;
+            flex-grow: 1;
+            max-width: 600px;
+            margin: 0 2rem;
+        }
+        
+        .search-input {
+            flex-grow: 1;
+            padding: 0.75rem 1rem;
+            border: none;
+            border-radius: var(--border-radius) 0 0 var(--border-radius);
+            font-size: 1rem;
+            outline: none;
+        }
+        
+        .search-button {
+            background-color: var(--secondary);
+            color: white;
+            border: none;
+            padding: 0 1.5rem;
+            border-radius: 0 var(--border-radius) var(--border-radius) 0;
+            cursor: pointer;
+            font-weight: 500;
+            transition: var(--transition);
+        }
+        
+        .search-button:hover {
+            background-color: #e07b0a;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 1.5rem;
+        }
+        
+        .nav-link {
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            font-weight: 500;
+            transition: var(--transition);
+        }
+        
+        .nav-link:hover {
+            color: white;
+        }
+        
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('https://images.unsplash.com/photo-1639762681057-408e52192e55?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80');
+            background-size: cover;
+            background-position: center;
+            color: white;
+            padding: 4rem 0;
+            text-align: center;
+        }
+        
+        .hero h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .hero p {
+            font-size: 1.2rem;
+            max-width: 700px;
+            margin: 0 auto 2rem;
+            opacity: 0.9;
+        }
+        
+        /* Network Tabs */
+        .network-tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 2rem;
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            overflow: hidden;
+            max-width: 800px;
+            margin: -2rem auto 3rem auto;
+        }
+        
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 1.2rem;
+            cursor: pointer;
+            transition: var(--transition);
+            font-weight: 500;
+            border-bottom: 3px solid transparent;
+        }
+        
+        .tab.active {
+            border-bottom: 3px solid var(--secondary);
+            color: var(--secondary);
+        }
+        
+        .tab:hover:not(.active) {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+        
+        /* Stats Cards */
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+        
+        .stat-card {
+            background-color: white;
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            box-shadow: var(--box-shadow);
+            transition: var(--transition);
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-card .label {
+            font-size: 0.9rem;
+            color: var(--gray);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--dark);
+            font-family: 'Roboto Mono', monospace;
+        }
+        
+        .stat-card .subtext {
+            font-size: 0.9rem;
+            color: var(--gray);
+            margin-top: 0.5rem;
+        }
+        
+        /* Blocks Section */
+        .section-title {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            color: var(--dark);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .blocks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+        
+        .block-card {
+            background-color: white;
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            box-shadow: var(--box-shadow);
+            transition: var(--transition);
+            text-decoration: none;
+            color: inherit;
+        }
+        
+        .block-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .block-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .block-height {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        
+        .block-timestamp {
+            font-size: 0.9rem;
+            color: var(--gray);
+        }
+        
+        .block-hash {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 0.9rem;
+            color: var(--dark);
+            word-break: break-all;
+            margin-bottom: 1rem;
+        }
+        
+        .block-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+        
+        .block-stat {
+            font-size: 0.9rem;
+        }
+        
+        .block-stat .label {
+            color: var(--gray);
+            margin-bottom: 0.25rem;
+        }
+        
+        .block-stat .value {
+            font-weight: 500;
+            color: var(--dark);
+            font-family: 'Roboto Mono', monospace;
+        }
+        
+        /* Footer */
+        footer {
+            background-color: var(--dark);
+            color: white;
+            padding: 2rem 0;
+            margin-top: 3rem;
+        }
+        
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .footer-links {
+            display: flex;
+            gap: 1.5rem;
+        }
+        
+        .footer-link {
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            transition: var(--transition);
+        }
+        
+        .footer-link:hover {
+            color: white;
+        }
+        
+        .copyright {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.9rem;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .navbar {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .search-form {
+                width: 100%;
+                margin: 1rem 0;
+            }
+            
+            .network-tabs {
+                flex-direction: column;
+            }
+            
+            .blocks-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    
+    
+    
+</head>
+<body>
+    <header>
+        <div class="container">
+            <nav class="navbar">
+                <a href="/" class="logo">CryptoNet<span>X</span></a>
+                
+                <form class="search-form" action="/search" method="post">
+                    <input type="search" name="query" class="search-input" placeholder="Search by block height/hash, transaction ID, or address..." required>
+                    <button type="submit" class="search-button">Search</button>
+                </form>
+                
+                <div class="nav-links">
+                    <a href="/" class="nav-link">Home</a>
+                    <a href="#" class="nav-link">Lnd Chain</a>
+                    <a href="#" class="nav-link">Bitcoin Mainnet</a>
+                    
+                </div>
+            </nav>
+        </div>
+    </header>
+    {{template "content" .}}
+</body>
+</html>
+{{end}}
